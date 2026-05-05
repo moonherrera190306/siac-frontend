@@ -71,7 +71,7 @@ export default function AlumnoHorarioPage() {
             <h2 className="text-xl font-semibold">{dia.dia}</h2>
 
             <div className="grid md:grid-cols-3 gap-4 mt-4">
-              {dia.clases.map((clase, i) => (
+              {dia.clases.map((clase: any, i: number) => (
                 <div key={i} className="bg-gray-50 p-4 rounded-xl border">
                   <p className="text-sm text-gray-500">{clase.hora}</p>
                   <h3 className="font-semibold">{clase.materia}</h3>
