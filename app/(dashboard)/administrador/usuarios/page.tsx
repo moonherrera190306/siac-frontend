@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 export default function AdministradorUsuariosPage() {
-  const [usuarios, setUsuarios] = useState([]);
+  const [usuarios, setUsuarios] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
