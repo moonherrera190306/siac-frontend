@@ -12,7 +12,7 @@ export default function DirectorAlumnosPage() {
       const token = localStorage.getItem("token");
 
       const res = await fetch(
-        "https://siac-backend-production.up.railway.app/api/director/alumnos",
+        "http://localhost:4000/api/director/alumnos",
         {
           headers: {
             Authorization: `Bearer ${token}`,

@@ -7,7 +7,7 @@ export default function CajaReportesPage() {
       const token = localStorage.getItem("token");
 
       const res = await fetch(
-       `https://siac-backend-production.up.railway.app/api/reportes/${tipo}`,
+       `http://localhost:4000/api/reportes/${tipo}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,

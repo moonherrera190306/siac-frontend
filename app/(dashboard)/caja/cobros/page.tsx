@@ -17,7 +17,7 @@ export default function PagosPage() {
 
   // 🔍 cargar alumnos
   const fetchAlumnos = async () => {
-    const res = await fetch("https://siac-backend-production.up.railway.app/api/alumnos", {
+    const res = await fetch("http://localhost:4000/api/alumnos", {
       headers: { Authorization: `Bearer ${token}` }
     });
     const data = await res.json();
@@ -26,7 +26,7 @@ export default function PagosPage() {
 
   // 📄 cargar pagos
   const fetchPagos = async (alumnoId: string) => {
-    const res = await fetch(`https://siac-backend-production.up.railway.app/api/pagos/${alumnoId}`, {
+    const res = await fetch(`http://localhost:4000/api/pagos/${alumnoId}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     const data = await res.json();
@@ -41,7 +41,7 @@ export default function PagosPage() {
   const handleSubmit = async (e: any) => {
     e.preventDefault();
 
-    await fetch("https://siac-backend-production.up.railway.app/api/pagos", {
+    await fetch("http://localhost:4000/api/pagos", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -9,7 +9,7 @@ export default function CajaPagosPendientesPage() {
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
   const fetchPagos = async () => {
-    const res = await fetch("https://siac-backend-production.up.railway.app/api/pagos", {
+    const res = await fetch("http://localhost:4000/api/pagos", {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -31,7 +31,7 @@ export default function CajaPagosPendientesPage() {
 
   // 💰 PAGAR
   const pagar = async (id: string) => {
-    await fetch(`https://siac-backend-production.up.railway.app/api/pagos/pagar/${id}`, {
+    await fetch(`http://localhost:4000/api/pagos/pagar/${id}`, {
       method: "PUT",
       headers: {
         Authorization: `Bearer ${token}`,

@@ -12,7 +12,7 @@ export default function AlumnoHorarioPage() {
 
       try {
         const res = await fetch(
-          `https://siac-backend-production.up.railway.app/api/alumnos/horario/${user.id}`,
+          `http://localhost:4000/api/alumnos/horario/${user.id}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,

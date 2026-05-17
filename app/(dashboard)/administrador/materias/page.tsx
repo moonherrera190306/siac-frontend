@@ -21,7 +21,7 @@ export default function AdministradorMateriasPage() {
       try {
         // 🔥 TRAER MATERIAS
         const res = await fetch(
-          "https://siac-backend-production.up.railway.app/api/materias",
+          "http://localhost:4000/api/materias",
           {
             headers: {
               Authorization: `Bearer ${token}`,

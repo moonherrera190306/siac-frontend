@@ -1,127 +1,105 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { apiFetch } from "@/lib/apiClient";
-
-type ResumenItem = {
-  title: string;
-  value: number;
-  description: string;
-};
-
-type ClaseHoy = {
-  hora: string;
-  materia: string;
-  grupo: string;
-  aula: string;
-};
+import { useEffect, useState } from "react";
 
 export default function MaestroDashboardPage() {
-  const [resumen, setResumen] = useState<ResumenItem[]>([]);
-  const [clasesHoy, setClasesHoy] = useState<ClaseHoy[]>([]);
-  const [pendientes, setPendientes] = useState<string[]>([]);
+  const [dashboard, setDashboard] = useState<any>(null);
+  const [grupos, setGrupos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-  async function fetchData() {
-    try {
-      setLoading(true);
-      setError("");
+    const fetchDashboard = async () => {
+      try {
+        setLoading(true);
 
-      // 🔥 usar grupos porque sí funciona
-      const response = await apiFetch(
-        "/api/docentes/grupos"
-      );
+        const token = localStorage.getItem("token");
 
-      const grupos = Array.isArray(response?.data)
-        ? response.data
-        : [];
+        // 🔥 DASHBOARD
+        const dashboardRes = await fetch(
+          "http://localhost:4000/api/docentes/dashboard",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
-      const totalGrupos = grupos.length;
+        const dashboardData =
+          await dashboardRes.json();
 
-      const totalAlumnos = grupos.reduce(
-        (acc: number, grupo: any) =>
-          acc + (grupo?.totalAlumnos ?? 0),
-        0
-      );
+        if (!dashboardRes.ok) {
+          throw new Error(
+            dashboardData.message ||
+              "Error cargando dashboard"
+          );
+        }
 
-      setResumen([
-        {
-          title: "Grupos asignados",
-          value: totalGrupos,
-          description: "Grupos bajo tu responsabilidad",
-        },
-        {
-          title: "Materias",
-          value: totalGrupos,
-          description: "Materias asignadas",
-        },
-        {
-          title: "Alumnos",
-          value: totalAlumnos,
-          description: "Total de alumnos",
-        },
-        {
-          title: "Promedio general",
-          value: 8.7,
-          description: "Promedio académico",
-        },
-      ]);
+        setDashboard(dashboardData.data);
 
-      setClasesHoy([
-        {
-          hora: "07:00 - 08:00",
-          materia: "Matemáticas",
-          grupo: "3A",
-          aula: "Aula 1",
-        },
-      ]);
+        // 🔥 GRUPOS
+        const gruposRes = await fetch(
+          "http://localhost:4000/api/docentes/grupos",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
-      setPendientes([
-        "Capturar calificaciones",
-        "Registrar asistencia",
-      ]);
-    } catch (err: any) {
-      console.error(err);
+        const gruposData =
+          await gruposRes.json();
 
-      setError(
-        err?.message || "Error cargando dashboard"
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
+        if (!gruposRes.ok) {
+          throw new Error(
+            gruposData.message ||
+              "Error cargando grupos"
+          );
+        }
 
-  fetchData();
-}, []);
+        setGrupos(gruposData.data || []);
 
-  const totalPendientes = useMemo(
-    () => pendientes?.length ?? 0,
-    [pendientes]
-  );
+      } catch (err: any) {
+        console.error(
+          "ERROR DASHBOARD:",
+          err
+        );
 
-  // 🔄 LOADING
+        setError(
+          err.message ||
+            "Error cargando dashboard"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboard();
+  }, []);
+
+  /* =========================
+     ⏳ LOADING
+  ========================= */
   if (loading) {
     return (
       <div className="p-6">
-        <p className="text-gray-600">
-          Cargando dashboard...
-        </p>
+        <p>Cargando dashboard...</p>
       </div>
     );
   }
 
-  // ❌ ERROR
+  /* =========================
+     ❌ ERROR
+  ========================= */
   if (error) {
     return (
       <div className="p-6">
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-          <p className="font-medium text-red-600">
+        <div className="rounded-xl border border-red-300 bg-red-50 p-4">
+          <h2 className="font-semibold text-red-700">
             Error cargando dashboard
-          </p>
+          </h2>
 
-          <p className="mt-1 text-sm text-red-500">
+          <p className="text-red-600 mt-1">
             {error}
           </p>
         </div>
@@ -129,105 +107,104 @@ export default function MaestroDashboardPage() {
     );
   }
 
+  /* =========================
+     ✅ DASHBOARD
+  ========================= */
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
+
       {/* HEADER */}
-      <section className="rounded-2xl border bg-white p-6 shadow-sm">
+      <section className="rounded-2xl bg-white border p-6 shadow-sm">
         <h1 className="text-3xl font-bold">
-          Panel del maestro
+          Dashboard Maestro
         </h1>
 
-        <p className="text-gray-500">
-          Información académica en tiempo real
+        <p className="text-gray-600 mt-2">
+          Bienvenido al panel académico
         </p>
       </section>
 
-      {/* RESUMEN */}
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {(resumen ?? []).map((item) => (
-          <div
-            key={item?.title}
-            className="rounded-2xl border bg-white p-5 shadow-sm"
-          >
-            <p className="text-sm text-gray-500">
-              {item?.title ?? ""}
-            </p>
+      {/* KPIs */}
+      <section className="grid md:grid-cols-4 gap-4">
 
-            <h2 className="text-3xl font-bold">
-              {item?.value ?? 0}
-            </h2>
+        <div className="rounded-2xl bg-white border p-5 shadow-sm">
+          <p className="text-gray-500 text-sm">
+            Materias
+          </p>
 
-            <p className="text-sm text-gray-500">
-              {item?.description ?? ""}
-            </p>
-          </div>
-        ))}
-      </section>
-
-      {/* CONTENIDO */}
-      <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        {/* CLASES */}
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold">
-            Clases de hoy
+          <h2 className="text-3xl font-bold mt-2">
+            {dashboard?.materias ?? 0}
           </h2>
-
-          <div className="mt-4 space-y-3">
-            {(clasesHoy ?? []).length === 0 ? (
-              <p className="text-gray-500">
-                No hay clases programadas.
-              </p>
-            ) : (
-              (clasesHoy ?? []).map((clase, i) => (
-                <div
-                  key={i}
-                  className="rounded-xl border bg-gray-50 p-4"
-                >
-                  <p className="font-semibold">
-                    {clase?.materia ?? "Materia"}
-                  </p>
-
-                  <p className="text-sm text-gray-500">
-                    {clase?.hora ?? "--"} ·{" "}
-                    {clase?.grupo ?? "N/A"} ·{" "}
-                    {clase?.aula ?? "Sin aula"}
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
         </div>
 
-        {/* PENDIENTES */}
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">
-              Pendientes
-            </h2>
+        <div className="rounded-2xl bg-white border p-5 shadow-sm">
+          <p className="text-gray-500 text-sm">
+            Grupos
+          </p>
 
-            <span className="rounded-full bg-slate-900 px-3 py-1 text-sm text-white">
-              {totalPendientes}
-            </span>
-          </div>
-
-          <div className="mt-4 space-y-3">
-            {(pendientes ?? []).length === 0 ? (
-              <p className="text-gray-500">
-                No hay pendientes.
-              </p>
-            ) : (
-              (pendientes ?? []).map((item, i) => (
-                <div
-                  key={i}
-                  className="rounded-xl border bg-gray-50 p-4"
-                >
-                  {item}
-                </div>
-              ))
-            )}
-          </div>
+          <h2 className="text-3xl font-bold mt-2">
+            {dashboard?.totalGrupos ?? 0}
+          </h2>
         </div>
+
+        <div className="rounded-2xl bg-white border p-5 shadow-sm">
+          <p className="text-gray-500 text-sm">
+            Alumnos
+          </p>
+
+          <h2 className="text-3xl font-bold mt-2">
+            {dashboard?.totalAlumnos ?? 0}
+          </h2>
+        </div>
+
+        <div className="rounded-2xl bg-white border p-5 shadow-sm">
+          <p className="text-gray-500 text-sm">
+            Promedio
+          </p>
+
+          <h2 className="text-3xl font-bold mt-2">
+            {dashboard?.promedioGeneral ?? 0}
+          </h2>
+        </div>
+
       </section>
+
+      {/* GRUPOS */}
+      <section className="rounded-2xl bg-white border p-6 shadow-sm">
+
+        <h2 className="text-2xl font-bold mb-4">
+          Mis grupos
+        </h2>
+
+        {!grupos.length ? (
+          <p className="text-gray-500">
+            No hay grupos asignados
+          </p>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-4">
+
+            {grupos.map((grupo) => (
+              <div
+                key={grupo.id}
+                className="rounded-xl border p-4"
+              >
+                <h3 className="font-semibold text-lg">
+                  {grupo.nombre}
+                </h3>
+
+                <p className="text-gray-600 mt-2">
+                  Total alumnos:
+                  {" "}
+                  {grupo.totalAlumnos ?? 0}
+                </p>
+              </div>
+            ))}
+
+          </div>
+        )}
+
+      </section>
+
     </div>
   );
 }

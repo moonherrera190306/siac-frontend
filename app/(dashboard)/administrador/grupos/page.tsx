@@ -21,7 +21,7 @@ export default function AdministradorGruposPage() {
       try {
         // 🔥 TRAER GRUPOS
         const res = await fetch(
-          "siac-backend-production.up.railway.app",
+          "http://localhost:4000",
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -35,7 +35,7 @@ export default function AdministradorGruposPage() {
         const gruposCompletos = await Promise.all(
           gruposData.map(async (g: any) => {
             const resGrupo = await fetch(
-              `http://siac-backend-production.up.railway.app/api/grupos/${g.id}`,
+              `http://localhost:4000/api/grupos/${g.id}`,
               {
                 headers: {
                   Authorization: `Bearer ${token}`,

@@ -11,7 +11,7 @@ export default function AlumnoDocumentosPage() {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
 
       const res = await fetch(
-        `https://siac-backend-production.up.railway.app/api/documentos/${user.id}`,
+        `http://localhost:4000/api/documentos/${user.id}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,

@@ -20,7 +20,7 @@ export default function AdministradorPagosPage() {
     const fetchPagos = async () => {
       try {
         const res = await fetch(
-          "https://siac-backend-production.up.railway.app/api/pagos",
+          "http://localhost:4000/api/pagos",
           {
             headers: {
               Authorization: `Bearer ${token}`,
