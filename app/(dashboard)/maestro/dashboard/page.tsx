@@ -23,7 +23,7 @@ export default function MaestroDashboardPage() {
       try {
         // 🔥 GRUPOS DEL MAESTRO
         const resGrupos = await fetch(
-          "http://localhost:4000/api/docentes/grupos",
+          "https://siac-backend-production.up.railway.app/api/docentes/grupos",
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -35,7 +35,7 @@ export default function MaestroDashboardPage() {
 
         // 🔥 MATERIAS
         const resMaterias = await fetch(
-          "http://localhost:4000/api/materias",
+          "https://siac-backend-production.up.railway.app/api/materias",
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -50,7 +50,7 @@ export default function MaestroDashboardPage() {
 
         for (const g of grupos) {
           const resGrupo = await fetch(
-            `http://localhost:4000/api/grupos/${g.id}`,
+            `https://siac-backend-production.up.railway.app/api/grupos/${g.id}`,
             {
               headers: {
                 Authorization: `Bearer ${token}`,

@@ -11,7 +11,7 @@ export default function AlumnoMateriasPage() {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
 
       const res = await fetch(
-        `http://localhost:4000/api/alumnos/materias/${user.id}`,
+        `https://siac-backend-production.up.railway.app/api/alumnos/materias/${user.id}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,

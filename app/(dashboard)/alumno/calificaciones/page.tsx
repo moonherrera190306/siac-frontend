@@ -13,7 +13,7 @@ export default function AlumnoCalificacionesPage() {
 
       try {
         const res = await fetch(
-          `http://localhost:4000/api/calificaciones/alumno/${user.id}`,
+          `https://siac-backend-production.up.railway.app/api/calificaciones/alumno/${user.id}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,

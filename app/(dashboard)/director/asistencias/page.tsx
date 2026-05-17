@@ -13,7 +13,7 @@ export default function DirectorAsistenciasPage() {
         const token = localStorage.getItem("token");
 
         const res = await fetch(
-          "http://localhost:4000/api/director/asistencias",
+          "https://siac-backend-production.up.railway.app/api/director/asistencias",
           {
             headers: {
               Authorization: `Bearer ${token}`,

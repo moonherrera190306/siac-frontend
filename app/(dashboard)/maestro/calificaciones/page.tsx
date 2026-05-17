@@ -28,7 +28,7 @@ export default function Page() {
   useEffect(() => {
     if (!token) return;
 
-    fetch("http://localhost:4000/api/docentes/grupos", {
+    fetch("https://siac-backend-production.up.railway.app/api/docentes/grupos", {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -50,7 +50,7 @@ export default function Page() {
 
     setLoading(true);
 
-    fetch(`http://localhost:4000/api/grupos/${grupoId}`, {
+    fetch(`https://siac-backend-production.up.railway.app/api/grupos/${grupoId}`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -78,7 +78,7 @@ export default function Page() {
 
       for (const m of grupo.materias) {
         const res = await fetch(
-          `http://localhost:4000/api/calificaciones/materia/${m.id}`,
+          `https://siac-backend-production.up.railway.app/api/calificaciones/materia/${m.id}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -132,7 +132,7 @@ export default function Page() {
       });
 
       const res = await fetch(
-        "http://localhost:4000/api/calificaciones",
+        "https://siac-backend-production.up.railway.app/api/calificaciones",
         {
           method: "POST",
           headers: {

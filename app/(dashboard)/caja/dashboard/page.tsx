@@ -9,7 +9,7 @@ export default function CajaDashboardPage() {
     const fetchPagos = async () => {
       const token = localStorage.getItem("token");
 
-      const res = await fetch("http://localhost:4000/api/pagos", {
+      const res = await fetch("https://siac-backend-production.up.railway.app/api/pagos", {
         headers: {
           Authorization: `Bearer ${token}`,
         },

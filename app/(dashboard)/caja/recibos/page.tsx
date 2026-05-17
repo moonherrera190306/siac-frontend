@@ -13,7 +13,7 @@ export default function CajaHistorialPage() {
   // 🔥 cargar pagos reales
   useEffect(() => {
     const fetchPagos = async () => {
-      const res = await fetch("http://localhost:4000/api/pagos", {
+      const res = await fetch("https://siac-backend-production.up.railway.app/api/pagos", {
         headers: {
           Authorization: `Bearer ${token}`,
         },

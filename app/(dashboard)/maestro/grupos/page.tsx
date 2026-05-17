@@ -21,7 +21,7 @@ export default function MaestroGruposPage() {
       try {
         // 🔥 GRUPOS DEL MAESTRO
         const res = await fetch(
-          "http://localhost:4000/api/docentes/grupos",
+          "https://siac-backend-production.up.railway.app/api/docentes/grupos",
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -35,7 +35,7 @@ export default function MaestroGruposPage() {
         const gruposCompletos = await Promise.all(
           gruposData.map(async (g: any) => {
             const resGrupo = await fetch(
-              `http://localhost:4000/api/grupos/${g.id}`,
+              `https://siac-backend-production.up.railway.app/api/grupos/${g.id}`,
               {
                 headers: {
                   Authorization: `Bearer ${token}`,

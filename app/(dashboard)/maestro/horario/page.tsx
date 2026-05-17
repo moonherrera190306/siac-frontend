@@ -23,7 +23,7 @@ export default function MaestroHorarioPage() {
       try {
         // 🔥 GRUPOS DEL MAESTRO
         const res = await fetch(
-          "http://localhost:4000/api/docentes/grupos",
+          "https://siac-backend-production.up.railway.app/api/docentes/grupos", 
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -38,7 +38,7 @@ export default function MaestroHorarioPage() {
         // 🔥 OBTENER MATERIAS DE CADA GRUPO
         for (const g of grupos) {
           const resGrupo = await fetch(
-            `http://localhost:4000/api/grupos/${g.id}`,
+            `https://siac-backend-production.up.railway.app/api/grupos/${g.id}`,
             {
               headers: {
                 Authorization: `Bearer ${token}`,

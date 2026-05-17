@@ -20,7 +20,7 @@ export default function AdministradorDashboardPage() {
 
       try {
         const res = await fetch(
-          "http://localhost:4000/api/admin/dashboard",
+          "http://siac-backend-production.up.railway.app/api/admin/dashboard",
           {
             headers: {
               Authorization: `Bearer ${token}`,

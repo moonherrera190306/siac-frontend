@@ -27,7 +27,7 @@ export default function Page() {
   useEffect(() => {
     if (!token) return;
 
-    fetch("http://localhost:4000/api/docentes/grupos", {
+    fetch("https://siac-backend-production.up.railway.app/api/docentes/grupos", {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
@@ -40,7 +40,7 @@ export default function Page() {
 
     setLoading(true);
 
-    fetch(`http://localhost:4000/api/grupos/${grupoId}`, {
+    fetch(`https://siac-backend-production.up.railway.app/api/grupos/${grupoId}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())

@@ -25,7 +25,7 @@ export default function AlumnoDashboardPage() {
       try {
         // 🔥 CALIFICACIONES
         const resCal = await fetch(
-          `http://localhost:4000/api/calificaciones/alumno/${user.id}`,
+          `https://siac-backend-production.up.railway.app/api/calificaciones/alumno/${user.id}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -44,7 +44,7 @@ export default function AlumnoDashboardPage() {
 
         // 🔥 PAGOS
         const resPagos = await fetch(
-          `http://localhost:4000/api/pagos/${user.id}`,
+          `https://siac-backend-production.up.railway.app/api/pagos/${user.id}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,

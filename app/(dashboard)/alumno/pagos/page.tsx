@@ -13,7 +13,7 @@ export default function AlumnoPagosPage() {
 
       try {
         const res = await fetch(
-          `http://localhost:4000/api/pagos/${user.id}`,
+          `https://siac-backend-production.up.railway.app/api/pagos/${user.id}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,

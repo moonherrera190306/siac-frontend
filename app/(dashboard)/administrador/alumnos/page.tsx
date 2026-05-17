@@ -19,7 +19,7 @@ export default function AdministradorAlumnosPage() {
       return;
     }
 
-    fetch("http://localhost:4000/api/alumnos", {
+    fetch("http://siac-backend-production.up.railway.app/api/alumnos", {
       headers: {
         Authorization: `Bearer ${token}`,
       },

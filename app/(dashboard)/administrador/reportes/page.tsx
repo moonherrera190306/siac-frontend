@@ -7,7 +7,7 @@ export default function AdministradorReportesPage() {
       const token = localStorage.getItem("token");
 
       const res = await fetch(
-        `http://localhost:4000/api/reportes/${tipo}`,
+        `https://siac-backend-production.up.railway.app/api/reportes/${tipo}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
