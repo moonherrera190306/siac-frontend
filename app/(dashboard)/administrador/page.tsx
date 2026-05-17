@@ -1,197 +1,175 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { apiFetch } from "@/lib/apiClient";
 
-export default function AdministradorDashboardPage() {
-  const router = useRouter();
+type Pago = {
+  id?: string;
+  concepto?: string;
+  monto?: number | string | null;
+  pagadoEn?: string | null;
+  fechaPago?: string | null;
+  estatus?: string;
+};
 
+function getCurrentUserId() {
+  try {
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    return user?.id || "";
+  } catch {
+    return "";
+  }
+}
+
+function normalizePagos(result: any): Pago[] {
+  if (Array.isArray(result)) return result;
+  if (Array.isArray(result?.pagos)) return result.pagos;
+  if (Array.isArray(result?.data)) return result.data;
+  if (Array.isArray(result?.data?.pagos)) return result.data.pagos;
+  return [];
+}
+
+function toNumber(value: unknown) {
+  const numberValue = Number(value ?? 0);
+  return Number.isFinite(numberValue) ? numberValue : 0;
+}
+
+export default function AlumnoPagosPage() {
+  const [pagos, setPagos] = useState<Pago[]>([]);
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<any>(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const fetchDashboard = async () => {
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        router.push("/login");
-        return;
-      }
-
+    async function fetchPagos() {
       try {
-        const res = await fetch(
-          "http://siac-backend-production.up.railway.app/api/admin/dashboard",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        setLoading(true);
+        setError("");
 
-        if (!res.ok) {
-          localStorage.removeItem("token");
-          router.push("/login");
-          return;
+        const userId = getCurrentUserId();
+
+        if (!userId) {
+          throw new Error("No se encontró el usuario en sesión.");
         }
 
-        const result = await res.json();
-        setData(result);
-
-      } catch (error) {
-        console.error("Error:", error);
+        const result = await apiFetch(`/api/pagos/${userId}`);
+        setPagos(normalizePagos(result));
+      } catch (err: any) {
+        console.error("Error cargando pagos del alumno:", err);
+        setError(err?.message || "Error al cargar pagos.");
+        setPagos([]);
       } finally {
         setLoading(false);
       }
-    };
+    }
 
-    fetchDashboard();
+    fetchPagos();
   }, []);
 
-  // ⏳ LOADING REAL
-  if (loading || !data) {
-    return <p className="p-10">Cargando dashboard...</p>;
+  const pagosPendientes = useMemo(
+    () => pagos.filter((p) => !p?.pagadoEn && p?.estatus !== "PAGADO"),
+    [pagos]
+  );
+
+  const pagosRealizados = useMemo(
+    () => pagos.filter((p) => p?.pagadoEn || p?.estatus === "PAGADO").length,
+    [pagos]
+  );
+
+  const saldoPendiente = useMemo(
+    () =>
+      pagosPendientes.reduce((acc, p) => {
+        return acc + toNumber(p?.monto);
+      }, 0),
+    [pagosPendientes]
+  );
+
+  const proximoPago = pagosPendientes[0];
+
+  if (loading) {
+    return <p className="p-6">Cargando pagos...</p>;
   }
 
-  // 🔥 DATOS REALES DEL BACKEND
-  const resumen = [
-    {
-      title: "Alumnos registrados",
-      value: data.totalAlumnos,
-      description: "Total de alumnos activos",
-    },
-    {
-      title: "Maestros activos",
-      value: data.totalDocentes,
-      description: "Docentes registrados",
-    },
-    {
-      title: "Grupos activos",
-      value: data.totalGrupos,
-      description: "Grupos del sistema",
-    },
-    {
-      title: "Pagos registrados",
-      value: data.totalPagos,
-      description: "Pagos realizados",
-    },
-  ];
-
-  // 🔥 ACCESOS CON NAVEGACIÓN REAL
-  const accesos = [
-    {
-      label: "Registrar nuevo alumno",
-      path: "/administrador/alumnos",
-    },
-    {
-      label: "Registrar nuevo maestro",
-      path: "/administrador/maestros",
-    },
-    {
-      label: "Crear grupo",
-      path: "/administrador/grupos",
-    },
-    {
-      label: "Asignar materia",
-      path: "/administrador/materias",
-    },
-  ];
-
-  // 🔥 ACTIVIDAD (puedes conectar después)
-  const actividad = [
-    {
-      titulo: "Sistema activo",
-      detalle: "El sistema SIAC está funcionando correctamente",
-      fecha: "Ahora",
-    },
-    {
-      titulo: "Base de datos conectada",
-      detalle: "Conexión con PostgreSQL exitosa",
-      fecha: "Hace unos segundos",
-    },
-  ];
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
+          {error}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
+      <h1 className="text-3xl font-bold">Pagos</h1>
 
-      {/* HEADER */}
-      <section className="rounded-2xl border bg-white p-6 shadow-sm">
-        <h1 className="text-3xl font-bold">
-          Dashboard de Administrador
-        </h1>
-        <p className="text-gray-500">
-          Bienvenido al sistema SIAC 🔥
-        </p>
-      </section>
-
-      {/* RESUMEN */}
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {resumen.map((item) => (
-          <div
-            key={item.title}
-            className="rounded-2xl border bg-white p-5 shadow-sm"
-          >
-            <p className="text-sm text-gray-500">
-              {item.title}
-            </p>
-            <h2 className="text-3xl font-bold">
-              {item.value}
-            </h2>
-            <p className="text-sm text-gray-500">
-              {item.description}
-            </p>
-          </div>
-        ))}
-      </section>
-
-      {/* CONTENIDO */}
-      <section className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-
-        {/* ACTIVIDAD */}
-        <div className="xl:col-span-2 rounded-2xl border bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold">
-            Actividad del sistema
-          </h2>
-
-          <div className="mt-4 space-y-4">
-            {actividad.map((item, index) => (
-              <div
-                key={index}
-                className="bg-gray-50 p-4 rounded-xl"
-              >
-                <h3 className="font-semibold">
-                  {item.titulo}
-                </h3>
-                <p className="text-sm text-gray-600">
-                  {item.detalle}
-                </p>
-                <span className="text-xs text-gray-500">
-                  {item.fecha}
-                </span>
-              </div>
-            ))}
-          </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="rounded-xl bg-white p-4 shadow">
+          <p className="text-sm text-gray-500">Saldo pendiente</p>
+          <h2 className="text-2xl font-bold">${saldoPendiente.toFixed(2)}</h2>
         </div>
 
-        {/* ACCESOS */}
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold">
-            Accesos rápidos
-          </h2>
-
-          <div className="mt-4 space-y-3">
-            {accesos.map((item, index) => (
-              <button
-                key={index}
-                onClick={() => router.push(item.path)}
-                className="w-full bg-slate-900 text-white px-4 py-3 rounded-xl text-left hover:bg-slate-800"
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
+        <div className="rounded-xl bg-white p-4 shadow">
+          <p className="text-sm text-gray-500">Pagos realizados</p>
+          <h2 className="text-2xl font-bold">{pagosRealizados}</h2>
         </div>
 
-      </section>
+        <div className="rounded-xl bg-white p-4 shadow">
+          <p className="text-sm text-gray-500">Próximo pago</p>
+          <h2 className="text-2xl font-bold">
+            {proximoPago?.concepto ?? "Sin pendientes"}
+          </h2>
+        </div>
+      </div>
+
+      <div className="rounded-xl bg-white p-6 shadow">
+        <h2 className="mb-4 font-semibold">Historial de pagos</h2>
+
+        {pagos.length === 0 ? (
+          <p className="text-gray-500">No hay pagos registrados.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b text-gray-500">
+                  <th className="py-3">Concepto</th>
+                  <th className="py-3">Monto</th>
+                  <th className="py-3">Estado</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {pagos.map((p, i) => {
+                  const pagado = Boolean(p?.pagadoEn || p?.estatus === "PAGADO");
+
+                  return (
+                    <tr key={p?.id ?? i} className="border-b">
+                      <td className="py-3">{p?.concepto ?? "Sin concepto"}</td>
+                      <td className="py-3">${toNumber(p?.monto).toFixed(2)}</td>
+                      <td className="py-3">
+                        {pagado ? (
+                          <span className="text-green-600">Pagado</span>
+                        ) : (
+                          <span className="text-yellow-600">Pendiente</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {proximoPago && (
+        <div className="rounded-xl border bg-yellow-50 p-4">
+          <p className="font-semibold">
+            {proximoPago?.concepto ?? "Pago pendiente"}
+          </p>
+          <p>${toNumber(proximoPago?.monto).toFixed(2)}</p>
+        </div>
+      )}
     </div>
   );
 }

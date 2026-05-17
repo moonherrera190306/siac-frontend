@@ -1,110 +1,149 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { apiFetch } from "@/lib/apiClient";
+
+type Actividad = {
+  concepto?: string;
+  monto?: number;
+  alumno?: {
+    user?: {
+      name?: string;
+    };
+  };
+};
+
+type AdminDashboardData = {
+  totalAlumnos: number;
+  totalDocentes: number;
+  totalGrupos: number;
+  pagosPendientes: number;
+  actividad: Actividad[];
+};
+
+const defaultData: AdminDashboardData = {
+  totalAlumnos: 0,
+  totalDocentes: 0,
+  totalGrupos: 0,
+  pagosPendientes: 0,
+  actividad: [],
+};
+
+function normalizeAdminDashboard(result: any): AdminDashboardData {
+  const source = result?.resumen ?? result?.data?.resumen ?? result?.data ?? result ?? {};
+
+  return {
+    totalAlumnos: Number(source?.totalAlumnos ?? 0),
+    totalDocentes: Number(source?.totalDocentes ?? source?.totalMaestros ?? 0),
+    totalGrupos: Number(source?.totalGrupos ?? 0),
+    pagosPendientes: Number(source?.pagosPendientes ?? source?.totalPagos ?? 0),
+    actividad: Array.isArray(result?.actividad)
+      ? result.actividad
+      : Array.isArray(result?.data?.actividad)
+      ? result.data.actividad
+      : Array.isArray(source?.actividad)
+      ? source.actividad
+      : [],
+  };
+}
 
 export default function AdministradorDashboardPage() {
-  const router = useRouter();
-
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<any>(null);
+  const [error, setError] = useState("");
+  const [data, setData] = useState<AdminDashboardData>(defaultData);
 
   useEffect(() => {
-    const fetchDashboard = async () => {
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        router.push("/login");
-        return;
-      }
-
+    async function fetchDashboard() {
       try {
-        const res = await fetch("http://siac-backend-production.up.railway.app/api/admin/dashboard", {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        });
+        setLoading(true);
+        setError("");
 
-        if (!res.ok) {
-          localStorage.removeItem("token");
-          router.push("/login");
-          return;
-        }
-
-        const result = await res.json();
-        setData(result);
-
-      } catch (error) {
-        console.error(error);
+        const result = await apiFetch("/api/admin/dashboard");
+        setData(normalizeAdminDashboard(result));
+      } catch (err: any) {
+        console.error("Error dashboard admin:", err);
+        setError(err?.message || "Error al cargar dashboard");
+        setData(defaultData);
       } finally {
         setLoading(false);
       }
-    };
+    }
 
     fetchDashboard();
   }, []);
 
-  if (loading) return <p className="p-10">Cargando dashboard...</p>;
+  const resumen = useMemo(
+    () => [
+      {
+        title: "Alumnos registrados",
+        value: data?.totalAlumnos ?? 0,
+      },
+      {
+        title: "Maestros activos",
+        value: data?.totalDocentes ?? 0,
+      },
+      {
+        title: "Grupos activos",
+        value: data?.totalGrupos ?? 0,
+      },
+      {
+        title: "Pagos pendientes",
+        value: data?.pagosPendientes ?? 0,
+      },
+    ],
+    [data]
+  );
 
-  const resumen = [
-    {
-      title: "Alumnos registrados",
-      value: data?.totalAlumnos || 0,
-    },
-    {
-      title: "Maestros activos",
-      value: data?.totalDocentes || 0,
-    },
-    {
-      title: "Grupos activos",
-      value: data?.totalGrupos || 0,
-    },
-    {
-      title: "Pagos registrados",
-      value: data?.pagosPendientes || 0,
-    },
-  ];
+  if (loading) {
+    return <p className="p-10">Cargando dashboard...</p>;
+  }
+
+  if (error) {
+    return (
+      <div className="p-10">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
+          {error}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-
-      <section className="bg-white p-6 rounded-2xl shadow-sm">
+      <section className="rounded-2xl bg-white p-6 shadow-sm">
         <h1 className="text-3xl font-bold">Dashboard Admin 🔥</h1>
-        <p className="text-gray-500">
-          Resumen general del sistema SIAC
-        </p>
+        <p className="text-gray-500">Resumen general del sistema SIAC</p>
       </section>
 
-      {/* RESUMEN */}
-      <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {resumen.map((item) => (
-          <div key={item.title} className="bg-white p-5 rounded-2xl shadow-sm">
-            <p className="text-gray-500 text-sm">{item.title}</p>
-            <h2 className="text-3xl font-bold mt-2">{item.value}</h2>
+          <div key={item.title} className="rounded-2xl bg-white p-5 shadow-sm">
+            <p className="text-sm text-gray-500">{item.title}</p>
+            <h2 className="mt-2 text-3xl font-bold">{item.value}</h2>
           </div>
         ))}
       </section>
 
-      {/* ACTIVIDAD */}
-      <section className="bg-white p-6 rounded-2xl shadow-sm">
-        <h2 className="text-xl font-semibold mb-4">
-          Actividad reciente
-        </h2>
+      <section className="rounded-2xl bg-white p-6 shadow-sm">
+        <h2 className="mb-4 text-xl font-semibold">Actividad reciente</h2>
 
-        <div className="space-y-3">
-          {data?.actividad?.map((item: any, i: number) => (
-            <div key={i} className="bg-gray-50 p-4 rounded-xl">
-              <p className="font-medium">
-                Pago de {item.alumno?.user?.name}
-              </p>
-              <p className="text-sm text-gray-500">
-                {item.concepto} - ${item.monto}
-              </p>
-            </div>
-          ))}
-        </div>
+        {(data?.actividad ?? []).length === 0 ? (
+          <p className="text-gray-500">No hay actividad reciente.</p>
+        ) : (
+          <div className="space-y-3">
+            {(data?.actividad ?? []).map((item, i) => (
+              <div key={i} className="rounded-xl bg-gray-50 p-4">
+                <p className="font-medium">
+                  Pago de {item?.alumno?.user?.name ?? "Alumno no disponible"}
+                </p>
+                <p className="text-sm text-gray-500">
+                  {item?.concepto ?? "Sin concepto"} - ${item?.monto ?? 0}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
-
     </div>
   );
 }

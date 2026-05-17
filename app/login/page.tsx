@@ -17,12 +17,12 @@ export default function LoginPage() {
 
     if (token && user.role) {
       const roleRoutes: any = {
-        ADMIN: "/administrador",
-        ALUMNO: "/alumno",
-        CAJA: "/caja",
-        DIRECTOR: "/director",
-        MAESTRO: "/maestro",
-        SECRETARIA: "/secretaria"
+         ADMIN: "/administrador/dashboard",
+  ALUMNO: "/alumno/dashboard",
+  CAJA: "/caja/dashboard",
+  DIRECTOR: "/director/dashboard",
+  MAESTRO: "/maestro/dashboard",
+  SECRETARIA: "/secretaria/dashboard"
       };
 
       router.push(roleRoutes[user.role]);

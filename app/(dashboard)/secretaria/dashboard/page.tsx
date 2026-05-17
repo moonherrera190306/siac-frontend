@@ -1,70 +1,106 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { apiFetch } from "@/lib/apiClient";
+
+type SecretariaDashboardData = {
+  inscripcionesHoy: number;
+  documentosPendientes: number;
+  constanciasHoy: number;
+  tramitesActivos: number;
+};
+
+const defaultData: SecretariaDashboardData = {
+  inscripcionesHoy: 0,
+  documentosPendientes: 0,
+  constanciasHoy: 0,
+  tramitesActivos: 0,
+};
+
+function normalizeDashboard(result: any): SecretariaDashboardData {
+  const source = result?.data ?? result ?? {};
+
+  return {
+    inscripcionesHoy: Number(source?.inscripcionesHoy ?? 0),
+    documentosPendientes: Number(source?.documentosPendientes ?? 0),
+    constanciasHoy: Number(source?.constanciasHoy ?? 0),
+    tramitesActivos: Number(source?.tramitesActivos ?? 0),
+  };
+}
 
 export default function SecretariaDashboardPage() {
-  const [data, setData] = useState<any>(null);
+  const [data, setData] =
+    useState<SecretariaDashboardData>(defaultData);
+
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const fetchDashboard = async () => {
+    async function fetchDashboard() {
       try {
-        const token = localStorage.getItem("token");
+        setLoading(true);
+        setError("");
 
-        const res = await fetch(
-          "http://127.0.0.1:4000/api/secretaria/dashboard",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
+        const result = await apiFetch(
+          "/api/secretaria/dashboard"
         );
 
-        const json = await res.json();
-
-        if (!res.ok) throw new Error(json.message);
-
-        setData(json.data);
+        setData(normalizeDashboard(result));
       } catch (err: any) {
-        console.error(err);
-        setError(err.message);
+        console.error("Error dashboard secretaria:", err);
+
+        setError(
+          err?.message || "Error al cargar dashboard"
+        );
+
+        setData(defaultData);
       } finally {
         setLoading(false);
       }
-    };
+    }
 
     fetchDashboard();
   }, []);
 
-  if (loading) return <p className="p-6">Cargando dashboard...</p>;
+  const resumen = useMemo(
+    () => [
+      {
+        title: "Inscripciones del día",
+        value: data?.inscripcionesHoy ?? 0,
+        description: "Registros realizados hoy",
+      },
+      {
+        title: "Documentos pendientes",
+        value: data?.documentosPendientes ?? 0,
+        description: "Archivos por validar",
+      },
+      {
+        title: "Constancias generadas",
+        value: data?.constanciasHoy ?? 0,
+        description: "Emitidas hoy",
+      },
+      {
+        title: "Trámites activos",
+        value: data?.tramitesActivos ?? 0,
+        description: "Procesos administrativos",
+      },
+    ],
+    [data]
+  );
 
-  if (error)
-    return <p className="p-6 text-red-500">Error: {error}</p>;
+  if (loading) {
+    return <p className="p-6">Cargando dashboard...</p>;
+  }
 
-  // 🔥 DATOS DINÁMICOS
-  const resumen = [
-    {
-      title: "Inscripciones del día",
-      value: data.inscripcionesHoy,
-      description: "Registros realizados hoy",
-    },
-    {
-      title: "Documentos pendientes",
-      value: data.documentosPendientes,
-      description: "Archivos por validar",
-    },
-    {
-      title: "Constancias generadas",
-      value: data.constanciasHoy,
-      description: "Emitidas hoy",
-    },
-    {
-      title: "Trámites activos",
-      value: data.tramitesActivos,
-      description: "Procesos administrativos",
-    },
-  ];
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
+          {error}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -73,6 +109,7 @@ export default function SecretariaDashboardPage() {
         <h1 className="text-3xl font-bold">
           Dashboard de Secretaría
         </h1>
+
         <p className="text-gray-600">
           Control general de trámites escolares
         </p>
@@ -83,13 +120,17 @@ export default function SecretariaDashboardPage() {
         {resumen.map((item) => (
           <div
             key={item.title}
-            className="bg-white p-5 rounded-2xl shadow border"
+            className="rounded-2xl border bg-white p-5 shadow"
           >
-            <p className="text-sm text-gray-500">{item.title}</p>
-            <h2 className="text-3xl font-bold mt-2">
-              {item.value}
+            <p className="text-sm text-gray-500">
+              {item.title}
+            </p>
+
+            <h2 className="mt-2 text-3xl font-bold">
+              {item?.value ?? 0}
             </h2>
-            <p className="text-sm text-gray-500 mt-1">
+
+            <p className="mt-1 text-sm text-gray-500">
               {item.description}
             </p>
           </div>
