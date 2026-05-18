@@ -2,112 +2,447 @@
 
 import { useEffect, useState } from "react";
 
-export default function DirectorMaestrosPage() {
-  const [maestros, setMaestros] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export default function DirectorGruposPage() {
 
-  useEffect(() => {
-    const fetchMaestros = async () => {
-      try {
-        const token = localStorage.getItem("token");
+  const [grupos, setGrupos] =
+    useState<any[]>([]);
 
-        const res = await fetch(
-          "http://127.0.0.1:4000/api/director/maestros",
+  const [semestres, setSemestres] =
+    useState<any[]>([]);
+
+  const [nombre, setNombre] =
+    useState("");
+
+  const [turno, setTurno] =
+    useState("");
+
+  const [nivel, setNivel] =
+    useState("");
+
+  const [semestreId, setSemestreId] =
+    useState("");
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [creating, setCreating] =
+    useState(false);
+
+  // ========================================
+  // 🔥 FETCH DATA
+  // ========================================
+  const fetchData = async () => {
+
+    try {
+
+      const token =
+        localStorage.getItem("token");
+
+      // 👥 GRUPOS
+      const resGrupos =
+        await fetch(
+          "http://localhost:4000/api/grupos",
           {
             headers: {
-              Authorization: `Bearer ${token}`,
-            },
+              Authorization:
+                `Bearer ${token}`
+            }
           }
         );
 
-        const json = await res.json();
+      const gruposData =
+        await resGrupos.json();
 
-        if (!res.ok) {
-          throw new Error(json.message || "Error en backend");
+      // 📚 SEMESTRES
+      const resSemestres =
+        await fetch(
+          "http://localhost:4000/api/semestres",
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`
+            }
+          }
+        );
+
+      const semestresData =
+        await resSemestres.json();
+
+      // 🔥 NORMALIZAR
+      setGrupos(
+        Array.isArray(gruposData)
+          ? gruposData
+          : Array.isArray(gruposData?.data)
+          ? gruposData.data
+          : Array.isArray(gruposData?.grupos)
+          ? gruposData.grupos
+          : []
+      );
+
+      setSemestres(
+        Array.isArray(semestresData)
+          ? semestresData
+          : Array.isArray(semestresData?.data)
+          ? semestresData.data
+          : Array.isArray(semestresData?.semestres)
+          ? semestresData.semestres
+          : []
+      );
+
+    } catch (error) {
+
+      console.error(error);
+
+      alert(
+        "Error cargando grupos"
+      );
+
+    } finally {
+
+      setLoading(false);
+
+    }
+  };
+
+  // ========================================
+  // ➕ CREAR GRUPO
+  // ========================================
+  const crearGrupo = async () => {
+
+    if (!nombre) {
+
+      alert(
+        "Nombre requerido"
+      );
+
+      return;
+    }
+
+    try {
+
+      setCreating(true);
+
+      const token =
+        localStorage.getItem("token");
+
+      const res = await fetch(
+        "http://localhost:4000/api/grupos",
+        {
+
+          method: "POST",
+
+          headers: {
+
+            "Content-Type":
+              "application/json",
+
+            Authorization:
+              `Bearer ${token}`
+
+          },
+
+          body: JSON.stringify({
+
+            nombre,
+            turno,
+            nivel,
+            semestreId
+
+          })
+
         }
+      );
 
-        setMaestros(json.data);
-      } catch (err: any) {
-        console.error(err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
+      const response =
+        await res.json();
+
+      if (!res.ok) {
+
+        throw new Error(
+          response?.message ||
+          "Error creando grupo"
+        );
+
       }
-    };
 
-    fetchMaestros();
+      alert(
+        "✅ Grupo creado"
+      );
+
+      // 🔥 LIMPIAR
+      setNombre("");
+      setTurno("");
+      setNivel("");
+      setSemestreId("");
+
+      fetchData();
+
+    } catch (error: any) {
+
+      console.error(error);
+
+      alert(
+        error.message
+      );
+
+    } finally {
+
+      setCreating(false);
+
+    }
+  };
+
+  useEffect(() => {
+
+    fetchData();
+
   }, []);
 
-  if (loading) return <p className="p-6">Cargando maestros...</p>;
+  // ========================================
+  // LOADING
+  // ========================================
+  if (loading) {
 
-  if (error)
-    return <p className="p-6 text-red-500">Error: {error}</p>;
+    return (
+      <div className="p-6">
+        Cargando grupos...
+      </div>
+    );
 
+  }
+
+  // ========================================
+  // UI
+  // ========================================
   return (
-    <div className="space-y-6">
+
+    <div className="p-6 space-y-6">
+
       {/* HEADER */}
-      <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h1 className="text-3xl font-bold text-gray-800">Maestros</h1>
-        <p className="mt-2 text-gray-600">
-          Consulta el desempeño y carga académica docente.
+      <section className="bg-white rounded-2xl shadow p-6">
+
+        <h1 className="text-3xl font-bold">
+          Gestión de grupos 👥
+        </h1>
+
+        <p className="text-gray-500 mt-1">
+          Administración académica de grupos
         </p>
+
+      </section>
+
+      {/* FORM */}
+      <section className="bg-white rounded-2xl shadow p-6">
+
+        <h2 className="text-xl font-semibold mb-4">
+          Nuevo grupo
+        </h2>
+
+        <div className="grid md:grid-cols-2 gap-4">
+
+          {/* NOMBRE */}
+          <input
+            type="text"
+            placeholder="Ej: 3A Sistemas"
+            value={nombre}
+            onChange={(e) =>
+              setNombre(
+                e.target.value
+              )
+            }
+            className="border rounded-xl p-3"
+          />
+
+          {/* TURNO */}
+          <select
+            value={turno}
+            onChange={(e) =>
+              setTurno(
+                e.target.value
+              )
+            }
+            className="border rounded-xl p-3"
+          >
+
+            <option value="">
+              Selecciona turno
+            </option>
+
+            <option value="MATUTINO">
+              MATUTINO
+            </option>
+
+            <option value="VESPERTINO">
+              VESPERTINO
+            </option>
+
+            <option value="NOCTURNO">
+              NOCTURNO
+            </option>
+
+          </select>
+
+          {/* NIVEL */}
+          <select
+            value={nivel}
+            onChange={(e) =>
+              setNivel(
+                e.target.value
+              )
+            }
+            className="border rounded-xl p-3"
+          >
+
+            <option value="">
+              Selecciona nivel
+            </option>
+
+            <option value="PREPARATORIA">
+              PREPARATORIA
+            </option>
+
+            <option value="UNIVERSIDAD">
+              UNIVERSIDAD
+            </option>
+
+          </select>
+
+          {/* SEMESTRE */}
+          <select
+            value={semestreId}
+            onChange={(e) =>
+              setSemestreId(
+                e.target.value
+              )
+            }
+            className="border rounded-xl p-3"
+          >
+
+            <option value="">
+              Selecciona semestre
+            </option>
+
+            {
+              semestres.map((s) => (
+
+                <option
+                  key={s.id}
+                  value={s.id}
+                >
+                  {s.nombre}
+                </option>
+
+              ))
+            }
+
+          </select>
+
+        </div>
+
+        <button
+          onClick={crearGrupo}
+          disabled={creating}
+          className="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl"
+        >
+          {
+            creating
+              ? "Creando..."
+              : "Crear grupo"
+          }
+        </button>
+
       </section>
 
       {/* TABLA */}
-      <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left">
-            <thead>
-              <tr className="border-b border-gray-200 text-sm text-gray-500">
-                <th className="py-3 pr-4">Nombre</th>
-                <th className="py-3 pr-4">Materia</th>
-                <th className="py-3 pr-4">Grupos</th>
-                <th className="py-3 pr-4">Desempeño</th>
-                <th className="py-3 pr-4">Acción</th>
-              </tr>
-            </thead>
+      <section className="bg-white rounded-2xl shadow p-6">
 
-            <tbody>
-              {maestros.map((m) => (
-                <tr key={m.id} className="border-b border-gray-100">
-                  <td className="py-4 pr-4 font-medium text-gray-800">
-                    {m.nombre}
-                  </td>
+        <h2 className="text-xl font-semibold mb-4">
+          Grupos registrados
+        </h2>
 
-                  <td className="py-4 pr-4 text-gray-600">
-                    {m.materia}
-                  </td>
+        {
+          grupos.length === 0 ? (
 
-                  <td className="py-4 pr-4 text-gray-600">
-                    {m.grupos}
-                  </td>
+            <p className="text-gray-500">
+              No hay grupos registrados
+            </p>
 
-                  <td className="py-4 pr-4">
-                    <span
-                      className={`rounded-full px-3 py-1 text-sm font-medium ${
-                        m.desempeño === "Alto"
-                          ? "bg-green-100 text-green-700"
-                          : m.desempeño === "Bueno"
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-amber-100 text-amber-700"
-                      }`}
-                    >
-                      {m.desempeño}
-                    </span>
-                  </td>
+          ) : (
 
-                  <td className="py-4 pr-4">
-                    <button className="rounded-lg bg-slate-100 px-3 py-2 text-sm hover:bg-slate-200">
-                      Ver detalle
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            <div className="overflow-x-auto">
+
+              <table className="w-full">
+
+                <thead>
+
+                  <tr className="border-b">
+
+                    <th className="text-left p-3">
+                      Grupo
+                    </th>
+
+                    <th className="text-left p-3">
+                      Turno
+                    </th>
+
+                    <th className="text-left p-3">
+                      Nivel
+                    </th>
+
+                    <th className="text-left p-3">
+                      Semestre
+                    </th>
+
+                  </tr>
+
+                </thead>
+
+                <tbody>
+
+                  {
+                    grupos.map((g) => (
+
+                      <tr
+                        key={g.id}
+                        className="border-b"
+                      >
+
+                        <td className="p-3 font-medium">
+                          {g.nombre}
+                        </td>
+
+                        <td className="p-3">
+                          {g.turno || "-"}
+                        </td>
+
+                        <td className="p-3">
+                          {g.nivel || "-"}
+                        </td>
+
+                        <td className="p-3">
+                          {
+                            g?.semestre?.nombre ||
+                            "-"
+                          }
+                        </td>
+
+                      </tr>
+
+                    ))
+                  }
+
+                </tbody>
+
+              </table>
+
+            </div>
+
+          )
+        }
+
       </section>
+
     </div>
+
   );
 }

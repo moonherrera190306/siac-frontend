@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { apiFetch } from "@/lib/apiClient";
 
 type MateriaResumen = {
   materia: string;
@@ -10,6 +9,7 @@ type MateriaResumen = {
 
 type CalificacionItem = {
   calificacion?: number | string | null;
+
   materia?: {
     nombre?: string;
   };
@@ -23,8 +23,15 @@ type PagoItem = {
 
 function getCurrentUserId() {
   try {
-    const user = JSON.parse(localStorage.getItem("user") || "{}");
-    return user?.id || "";
+    const user = JSON.parse(
+      localStorage.getItem("user") || "{}"
+    );
+
+    return (
+      user?.alumnoId ||
+      user?.id ||
+      ""
+    );
   } catch {
     return "";
   }
@@ -32,55 +39,135 @@ function getCurrentUserId() {
 
 function normalizeArray(result: any) {
   if (Array.isArray(result)) return result;
-  if (Array.isArray(result?.data)) return result.data;
-  if (Array.isArray(result?.calificaciones)) return result.calificaciones;
-  if (Array.isArray(result?.pagos)) return result.pagos;
-  if (Array.isArray(result?.data?.calificaciones)) return result.data.calificaciones;
-  if (Array.isArray(result?.data?.pagos)) return result.data.pagos;
+
+  if (Array.isArray(result?.data))
+    return result.data;
+
+  if (
+    Array.isArray(
+      result?.calificaciones
+    )
+  )
+    return result.calificaciones;
+
+  if (Array.isArray(result?.pagos))
+    return result.pagos;
+
+  if (
+    Array.isArray(
+      result?.data?.calificaciones
+    )
+  )
+    return result.data.calificaciones;
+
+  if (
+    Array.isArray(
+      result?.data?.pagos
+    )
+  )
+    return result.data.pagos;
+
   return [];
 }
 
 function toNumber(value: unknown) {
   const n = Number(value ?? 0);
-  return Number.isFinite(n) ? n : 0;
+
+  return Number.isFinite(n)
+    ? n
+    : 0;
 }
 
-function agruparMaterias(calificaciones: CalificacionItem[]): MateriaResumen[] {
-  const agrupado: Record<string, number[]> = {};
+function agruparMaterias(
+  calificaciones: CalificacionItem[]
+): MateriaResumen[] {
+  const agrupado: Record<
+    string,
+    number[]
+  > = {};
 
-  calificaciones.forEach((item) => {
-    const materia = item?.materia?.nombre ?? "Materia sin nombre";
-    const calificacion = toNumber(item?.calificacion);
+  (calificaciones ?? []).forEach(
+    (item) => {
+      const materia =
+        item?.materia?.nombre ??
+        "Materia sin nombre";
 
-    if (!agrupado[materia]) {
-      agrupado[materia] = [];
+      const calificacion =
+        toNumber(
+          item?.calificacion
+        );
+
+      if (!agrupado[materia]) {
+        agrupado[materia] = [];
+      }
+
+      agrupado[materia].push(
+        calificacion
+      );
     }
+  );
 
-    agrupado[materia].push(calificacion);
-  });
+  return Object.entries(
+    agrupado
+  ).map(([materia, califs]) => {
+    const suma = califs.reduce(
+      (acc, calif) =>
+        acc + calif,
+      0
+    );
 
-  return Object.entries(agrupado).map(([materia, califs]) => {
-    const suma = califs.reduce((acc, calif) => acc + calif, 0);
-    const promedio = califs.length > 0 ? suma / califs.length : 0;
+    const promedio =
+      califs.length > 0
+        ? suma / califs.length
+        : 0;
 
     return {
       materia,
-      promedio: Number(promedio.toFixed(1)),
+
+      promedio: Number(
+        promedio.toFixed(1)
+      ),
     };
   });
 }
 
 export default function AlumnoDashboardPage() {
-  const [materias, setMaterias] = useState<MateriaResumen[]>([]);
-  const [pagosPendientes, setPagosPendientes] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [materias, setMaterias] =
+    useState<MateriaResumen[]>([]);
+
+  const [
+    pagosPendientes,
+    setPagosPendientes,
+  ] = useState(0);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [error, setError] =
+    useState("");
 
   const promedio = useMemo(() => {
-    if (materias.length === 0) return 0;
+    if (
+      (materias ?? []).length === 0
+    )
+      return 0;
 
-    const suma = materias.reduce((acc, item) => acc + toNumber(item.promedio), 0);
-    return Number((suma / materias.length).toFixed(1));
+    const suma = (
+      materias ?? []
+    ).reduce(
+      (acc, item) =>
+        acc +
+        toNumber(
+          item?.promedio
+        ),
+      0
+    );
+
+    return Number(
+      (
+        suma / materias.length
+      ).toFixed(1)
+    );
   }, [materias]);
 
   useEffect(() => {
@@ -89,34 +176,116 @@ export default function AlumnoDashboardPage() {
         setLoading(true);
         setError("");
 
-        const userId = getCurrentUserId();
+        const token =
+          localStorage.getItem(
+            "token"
+          );
 
-        if (!userId) {
-          throw new Error("No se encontró el usuario en sesión.");
+        const userId =
+          getCurrentUserId();
+
+        if (!token) {
+          throw new Error(
+            "Token inválido"
+          );
         }
 
-        const calificacionesResult = await apiFetch(
-          `/api/calificaciones/alumno/${userId}`
+        if (!userId) {
+          throw new Error(
+            "No se encontró el usuario."
+          );
+        }
+
+        // =========================
+        // CALIFICACIONES
+        // =========================
+
+        const resCal =
+          await fetch(
+            `http://localhost:4000/api/calificaciones/alumno/${userId}`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+
+        const calificacionesResult =
+          await resCal.json();
+
+        if (!resCal.ok) {
+          throw new Error(
+            calificacionesResult?.message ||
+              "Error cargando calificaciones"
+          );
+        }
+
+        const calificaciones =
+          normalizeArray(
+            calificacionesResult
+          ) as CalificacionItem[];
+
+        setMaterias(
+          agruparMaterias(
+            calificaciones
+          )
         );
 
-        const calificaciones = normalizeArray(
-          calificacionesResult
-        ) as CalificacionItem[];
+        // =========================
+        // PAGOS
+        // =========================
 
-        setMaterias(agruparMaterias(calificaciones));
+        const resPagos =
+          await fetch(
+            `http://localhost:4000/api/pagos/${userId}`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
 
-        const pagosResult = await apiFetch(`/api/pagos/${userId}`);
-        const pagos = normalizeArray(pagosResult) as PagoItem[];
+        const pagosResult =
+          await resPagos.json();
 
-        const pendientes = pagos.filter(
-          (p) => !p?.pagadoEn && p?.estatus !== "PAGADO"
+        if (!resPagos.ok) {
+          throw new Error(
+            pagosResult?.message ||
+              "Error cargando pagos"
+          );
+        }
+
+        const pagos =
+          normalizeArray(
+            pagosResult
+          ) as PagoItem[];
+
+        const pendientes = (
+          pagos ?? []
+        ).filter(
+          (p) =>
+            !p?.pagadoEn &&
+            p?.estatus !==
+              "PAGADO"
         );
 
-        setPagosPendientes(pendientes.length);
+        setPagosPendientes(
+          pendientes.length
+        );
+
       } catch (err: any) {
-        console.error("Error dashboard alumno:", err);
-        setError(err?.message || "Error al cargar dashboard del alumno.");
+        console.error(
+          "Error dashboard alumno:",
+          err
+        );
+
+        setError(
+          err?.message ||
+            "Error al cargar dashboard del alumno."
+        );
+
         setMaterias([]);
+
         setPagosPendientes(0);
       } finally {
         setLoading(false);
@@ -127,7 +296,11 @@ export default function AlumnoDashboardPage() {
   }, []);
 
   if (loading) {
-    return <p className="p-6">Cargando dashboard del alumno...</p>;
+    return (
+      <p className="p-6">
+        Cargando dashboard del alumno...
+      </p>
+    );
   }
 
   if (error) {
@@ -141,58 +314,127 @@ export default function AlumnoDashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Bienvenido, Alumno</h1>
+    <div className="space-y-6 p-6">
 
-      <div className="grid gap-4 md:grid-cols-4">
+      {/* HEADER */}
+      <section className="bg-white p-6 rounded-2xl shadow">
+        <h1 className="text-3xl font-bold">
+          Bienvenido, Alumno 🎓
+        </h1>
+
+        <p className="text-gray-500">
+          Panel académico estudiantil
+        </p>
+      </section>
+
+      {/* CARDS */}
+      <section className="grid gap-4 md:grid-cols-4">
+
         <div className="rounded-xl bg-white p-4 shadow">
-          <p className="text-sm text-gray-500">Promedio general</p>
-          <h2 className="text-2xl font-bold">{promedio}</h2>
+          <p className="text-sm text-gray-500">
+            Promedio general
+          </p>
+
+          <h2 className="text-2xl font-bold">
+            {promedio}
+          </h2>
         </div>
 
         <div className="rounded-xl bg-white p-4 shadow">
-          <p className="text-sm text-gray-500">Materias inscritas</p>
-          <h2 className="text-2xl font-bold">{materias.length}</h2>
+          <p className="text-sm text-gray-500">
+            Materias inscritas
+          </p>
+
+          <h2 className="text-2xl font-bold">
+            {
+              (
+                materias ?? []
+              ).length
+            }
+          </h2>
         </div>
 
         <div className="rounded-xl bg-white p-4 shadow">
-          <p className="text-sm text-gray-500">Asistencia</p>
-          <h2 className="text-2xl font-bold">--%</h2>
+          <p className="text-sm text-gray-500">
+            Asistencia
+          </p>
+
+          <h2 className="text-2xl font-bold">
+            --%
+          </h2>
         </div>
 
         <div className="rounded-xl bg-white p-4 shadow">
-          <p className="text-sm text-gray-500">Pagos pendientes</p>
-          <h2 className="text-2xl font-bold">{pagosPendientes}</h2>
+          <p className="text-sm text-gray-500">
+            Pagos pendientes
+          </p>
+
+          <h2 className="text-2xl font-bold">
+            {pagosPendientes}
+          </h2>
         </div>
-      </div>
 
-      <div className="rounded-xl bg-white p-6 shadow">
-        <h2 className="mb-4 text-lg font-semibold">Mis materias</h2>
+      </section>
 
-        {materias.length === 0 ? (
-          <p className="text-gray-500">No hay materias registradas.</p>
+      {/* TABLA */}
+      <section className="rounded-xl bg-white p-6 shadow">
+
+        <h2 className="mb-4 text-lg font-semibold">
+          Mis materias
+        </h2>
+
+        {(materias ?? []).length ===
+        0 ? (
+          <p className="text-gray-500">
+            No hay materias registradas.
+          </p>
         ) : (
           <div className="overflow-x-auto">
+
             <table className="w-full text-left">
+
               <thead>
                 <tr className="border-b text-gray-500">
-                  <th className="py-3">Materia</th>
-                  <th className="py-3">Promedio</th>
+                  <th className="py-3">
+                    Materia
+                  </th>
+
+                  <th className="py-3">
+                    Promedio
+                  </th>
                 </tr>
               </thead>
 
               <tbody>
-                {materias.map((m, i) => (
-                  <tr key={`${m.materia}-${i}`} className="border-b">
-                    <td className="py-3">{m.materia ?? "Materia sin nombre"}</td>
-                    <td className="py-3 font-semibold">{m.promedio ?? 0}</td>
-                  </tr>
-                ))}
+
+                {(materias ?? []).map(
+                  (m, i) => (
+                    <tr
+                      key={`${m.materia}-${i}`}
+                      className="border-b"
+                    >
+                      <td className="py-3">
+                        {m?.materia ??
+                          "Materia"}
+                      </td>
+
+                      <td className="py-3 font-semibold">
+                        {m?.promedio ??
+                          0}
+                      </td>
+                    </tr>
+                  )
+                )}
+
               </tbody>
+
             </table>
+
           </div>
         )}
-      </div>
+
+      </section>
+
     </div>
   );
 }

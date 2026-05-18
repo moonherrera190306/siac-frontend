@@ -1,131 +1,276 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+type Pago = {
+  id?: string;
+  concepto?: string;
+  monto?: number | string | null;
+  pagadoEn?: string | null;
+  createdAt?: string | null;
+
+  alumno?: {
+    matricula?: string;
+
+    user?: {
+      name?: string;
+    };
+  };
+};
+
+function normalizeData(result: any): Pago[] {
+  if (Array.isArray(result)) return result;
+
+  if (Array.isArray(result?.pagos)) {
+    return result.pagos;
+  }
+
+  if (Array.isArray(result?.data)) {
+    return result.data;
+  }
+
+  if (Array.isArray(result?.data?.pagos)) {
+    return result.data.pagos;
+  }
+
+  return [];
+}
+
+function formatMoney(value: unknown) {
+  const number = Number(value ?? 0);
+
+  if (Number.isNaN(number)) {
+    return "$0.00";
+  }
+
+  return number.toLocaleString("es-MX", {
+    style: "currency",
+    currency: "MXN",
+  });
+}
 
 export default function CajaHistorialPage() {
-  const [pagos, setPagos] = useState<any[]>([]);
+  const [pagos, setPagos] = useState<Pago[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
   const [search, setSearch] = useState("");
   const [fecha, setFecha] = useState("");
 
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("token") : null;
-
   useEffect(() => {
-    const fetchPagos = async () => {
-      const res = await fetch("http://localhost:4000/api/pagos", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+    async function fetchPagos() {
+      try {
+        setLoading(true);
+        setError("");
 
-      const data = await res.json();
+        const token = localStorage.getItem("token");
 
-      if (Array.isArray(data)) {
-        setPagos(data);
+        const res = await fetch(
+          "http://localhost:4000/api/pagos",
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const response = await res.json();
+
+        if (!res.ok) {
+          throw new Error(
+            response?.message ||
+              "Error al cargar historial"
+          );
+        }
+
+        const data = response?.data || [];
+
+        setPagos(normalizeData(data));
+      } catch (err: any) {
+        console.error(err);
+
+        setError(
+          err?.message ||
+            "Error interno del servidor"
+        );
+
+        setPagos([]);
+      } finally {
+        setLoading(false);
       }
-    };
+    }
 
     fetchPagos();
   }, []);
 
-  // 🔥 FILTROS
-  const filtrados = pagos.filter((p) => {
-    const texto =
-      p.alumno?.user?.name?.toLowerCase() +
-      p.concepto?.toLowerCase();
+  const filtrados = useMemo(() => {
+    return (pagos ?? []).filter((p) => {
+      const alumno =
+        p?.alumno?.user?.name?.toLowerCase() ||
+        "";
 
-    const coincideTexto = texto.includes(search.toLowerCase());
+      const concepto =
+        p?.concepto?.toLowerCase() || "";
 
-    const coincideFecha = fecha
-      ? new Date(p.pagadoEn).toISOString().slice(0, 10) === fecha
-      : true;
+      const texto = `${alumno} ${concepto}`;
 
-    return coincideTexto && coincideFecha;
-  });
+      const coincideTexto = texto.includes(
+        search.toLowerCase()
+      );
+
+      const fechaPago = p?.pagadoEn
+        ? new Date(p.pagadoEn)
+            .toISOString()
+            .slice(0, 10)
+        : "";
+
+      const coincideFecha = fecha
+        ? fechaPago === fecha
+        : true;
+
+      return coincideTexto && coincideFecha;
+    });
+  }, [pagos, search, fecha]);
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <p>Cargando historial...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
+          {error}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
+      <section className="rounded-2xl bg-white p-6 shadow">
+        <h1 className="text-3xl font-bold">
+          Historial
+        </h1>
 
-      <section className="bg-white p-6 rounded-2xl shadow">
-        <h1 className="text-3xl font-bold">Historial</h1>
         <p className="text-gray-500">
           Movimientos financieros del sistema
         </p>
       </section>
 
-      <section className="bg-white p-6 rounded-2xl shadow">
-
-        {/* 🔍 FILTROS */}
-        <div className="flex flex-col md:flex-row gap-3 mb-4">
-
+      <section className="rounded-2xl bg-white p-6 shadow">
+        {/* FILTROS */}
+        <div className="mb-4 flex flex-col gap-3 md:flex-row">
           <input
             type="text"
             placeholder="Buscar alumno o concepto..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="border p-2 rounded w-full"
+            onChange={(e) =>
+              setSearch(e.target.value)
+            }
+            className="w-full rounded-lg border p-3 outline-none focus:border-blue-500"
           />
 
           <input
             type="date"
             value={fecha}
-            onChange={(e) => setFecha(e.target.value)}
-            className="border p-2 rounded"
+            onChange={(e) =>
+              setFecha(e.target.value)
+            }
+            className="rounded-lg border p-3 outline-none focus:border-blue-500"
           />
-
         </div>
 
-        {/* 📄 TABLA */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
+        {/* TABLA */}
+        {(filtrados ?? []).length === 0 ? (
+          <p className="text-gray-500">
+            No hay movimientos registrados.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b text-gray-500">
+                  <th className="p-3">
+                    Fecha
+                  </th>
 
-            <thead>
-              <tr className="border-b text-gray-500">
-                <th>Fecha</th>
-                <th>Alumno</th>
-                <th>Concepto</th>
-                <th>Monto</th>
-                <th>Estado</th>
-              </tr>
-            </thead>
+                  <th className="p-3">
+                    Alumno
+                  </th>
 
-            <tbody>
-              {filtrados.map((p) => (
-                <tr key={p.id} className="border-b">
+                  <th className="p-3">
+                    Concepto
+                  </th>
 
-                  <td>
-                    {p.pagadoEn
-                      ? new Date(p.pagadoEn).toLocaleDateString()
-                      : "-"}
-                  </td>
+                  <th className="p-3">
+                    Monto
+                  </th>
 
-                  <td className="font-medium">
-                    {p.alumno?.user?.name}
-                  </td>
-
-                  <td>{p.concepto}</td>
-
-                  <td>${p.monto}</td>
-
-                  <td>
-                    {p.pagadoEn ? (
-                      <span className="text-green-600">
-                        Pagado
-                      </span>
-                    ) : (
-                      <span className="text-yellow-600">
-                        Pendiente
-                      </span>
-                    )}
-                  </td>
-
+                  <th className="p-3">
+                    Estado
+                  </th>
                 </tr>
-              ))}
-            </tbody>
+              </thead>
 
-          </table>
-        </div>
+              <tbody>
+                {(filtrados ?? []).map(
+                  (p, index) => (
+                    <tr
+                      key={p?.id ?? index}
+                      className="border-b"
+                    >
+                      <td className="p-3">
+                        {p?.pagadoEn
+                          ? new Date(
+                              p.pagadoEn
+                            ).toLocaleDateString(
+                              "es-MX"
+                            )
+                          : "-"}
+                      </td>
 
+                      <td className="p-3 font-medium">
+                        {p?.alumno?.user
+                          ?.name ??
+                          "Alumno no disponible"}
+                      </td>
+
+                      <td className="p-3">
+                        {p?.concepto ??
+                          "Sin concepto"}
+                      </td>
+
+                      <td className="p-3 font-semibold">
+                        {formatMoney(
+                          p?.monto
+                        )}
+                      </td>
+
+                      <td className="p-3">
+                        {p?.pagadoEn ? (
+                          <span className="rounded-full bg-green-100 px-3 py-1 text-sm text-green-700">
+                            Pagado
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-yellow-100 px-3 py-1 text-sm text-yellow-700">
+                            Pendiente
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </div>
   );

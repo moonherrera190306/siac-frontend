@@ -64,33 +64,156 @@ export default function DashboardLayout({
       },
     ],
 
-    ALUMNO: [
-      {
-        label: "Dashboard",
-        path: "/alumno/dashboard",
-      },
-    ],
+   ALUMNO: [
+  {
+    label: "Dashboard",
+    path: "/alumno/dashboard",
+  },
 
-    DIRECTOR: [
-      {
-        label: "Dashboard",
-        path: "/director/dashboard",
-      },
-    ],
+  {
+    label: "Materias",
+    path: "/alumno/materias",
+  },
+
+  {
+    label: "Calificaciones",
+    path: "/alumno/calificaciones",
+  },
+
+  {
+    label: "Asistencia",
+    path: "/alumno/asistencia",
+  },
+
+  {
+    label: "Horario",
+    path: "/alumno/horario",
+  },
+
+  {
+    label: "Pagos",
+    path: "/alumno/pagos",
+  },
+
+  {
+    label: "Documentos",
+    path: "/alumno/documentos",
+  },{
+    label: "Perfil ",
+    path: "/alumno/perfil",
+  },
+],
+
+  DIRECTOR: [
+  {
+    label: "Dashboard",
+    path: "/director/dashboard",
+  },
+
+  {
+    label: "Asistencias",
+    path: "/director/asistencias",
+  },
+
+  {
+    label: "Calificaciones",
+    path: "/director/calificaciones",
+  },
+
+  {
+    label: "Grupos",
+    path: "/director/grupos",
+  },
+
+  {
+    label: "Maestros",
+    path: "/director/maestros",
+  },
+
+  {
+    label: "Materias",
+    path: "/director/materias",
+  },
+  {
+    label: "Ciclos",
+    path: "/director/ciclos",
+  },
+
+  {
+    label: "Asignaciones",
+    path: "/director/asignaciones",
+  },
+
+
+  {
+    label: "Reportes",
+    path: "/director/reportes",
+  },
+],
 
     SECRETARIA: [
-      {
-        label: "Dashboard",
-        path: "/secretaria/dashboard",
-      },
-    ],
+  {
+    label: "Dashboard",
+    path: "/secretaria/dashboard",
+  },
+
+  {
+    label: "Alumnos",
+    path: "/secretaria/alumnos",
+  },
+
+  {
+    label: "Inscripciones",
+    path: "/secretaria/inscripciones",
+  },
+
+  {
+    label: "Grupos",
+    path: "/secretaria/grupos",
+  },
+
+  {
+    label: "Horarios",
+    path: "/secretaria/horarios",
+  },
+
+  {
+    label: "Documentos",
+    path: "/secretaria/documentos",
+  },
+
+  {
+    label: "Constancias",
+    path: "/secretaria/constancias",
+  },
+],
 
     CAJA: [
-      {
-        label: "Dashboard",
-        path: "/caja/dashboard",
-      },
-    ],
+  {
+    label: "Dashboard",
+    path: "/caja/dashboard",
+  },
+  {
+    label: "Cobros",
+    path: "/caja/cobros",
+  },
+  {
+    label: "Pagos Pendientes",
+    path: "/caja/pagos-pendientes",
+  },
+  {
+    label: "Historial",
+    path: "/caja/historial",
+  },
+  {
+    label: "Recibos",
+    path: "/caja/recibos",
+  },
+  {
+    label: "Reportes",
+    path: "/caja/reportes",
+  },
+],
   };
 
   const menu =

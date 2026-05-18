@@ -1,178 +1,320 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/apiClient";
-
-interface Materia {
-  id: string;
-  nombre: string;
-  docente: string;
-  promedio: number | string;
-  estatus: string;
-}
 
 export default function DirectorMateriasPage() {
-  const [materias, setMaterias] = useState<Materia[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchMaterias = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  const [materias, setMaterias] =
+    useState<any[]>([]);
 
-        // ✅ apiFetch ya manda token automáticamente
-        const response = await apiFetch("/api/director/materias");
+  const [nombre, setNombre] =
+    useState("");
 
-        console.log("MATERIAS RESPONSE:", response);
+  const [descripcion, setDescripcion] =
+    useState("");
 
-        // ✅ Blindaje de arrays
-        const materiasSeguras = Array.isArray(response?.data)
-          ? response.data
-          : [];
+  const [loading, setLoading] =
+    useState(true);
 
-        setMaterias(materiasSeguras);
-      } catch (err: any) {
-        console.error("ERROR MATERIAS:", err);
+  const [creating, setCreating] =
+    useState(false);
 
-        setError(
-          err?.message || "No se pudo cargar la información"
+  // ========================================
+  // 🔥 FETCH MATERIAS
+  // ========================================
+  const fetchMaterias = async () => {
+
+    try {
+
+      const token =
+        localStorage.getItem("token");
+
+      const res = await fetch(
+        "http://localhost:4000/api/materias",
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`
+          }
+        }
+      );
+
+      const data =
+        await res.json();
+
+      setMaterias(
+        Array.isArray(data)
+          ? data
+          : Array.isArray(data?.data)
+          ? data.data
+          : Array.isArray(data?.materias)
+          ? data.materias
+          : []
+      );
+
+    } catch (error) {
+
+      console.error(error);
+
+      alert(
+        "Error obteniendo materias"
+      );
+
+    } finally {
+
+      setLoading(false);
+
+    }
+  };
+
+  // ========================================
+  // ➕ CREAR MATERIA
+  // ========================================
+  const crearMateria = async () => {
+
+    if (!nombre) {
+
+      alert(
+        "Nombre requerido"
+      );
+
+      return;
+    }
+
+    try {
+
+      setCreating(true);
+
+      const token =
+        localStorage.getItem("token");
+
+      const res = await fetch(
+        "http://localhost:4000/api/materias",
+        {
+
+          method: "POST",
+
+          headers: {
+
+            "Content-Type":
+              "application/json",
+
+            Authorization:
+              `Bearer ${token}`
+
+          },
+
+          body: JSON.stringify({
+
+            nombre,
+            descripcion
+
+          })
+
+        }
+      );
+
+      const response =
+        await res.json();
+
+      if (!res.ok) {
+
+        throw new Error(
+          response?.message ||
+          "Error creando materia"
         );
 
-        // ✅ Evita undefined
-        setMaterias([]);
-      } finally {
-        setLoading(false);
       }
-    };
+
+      alert(
+        "✅ Materia creada"
+      );
+
+      // 🔥 LIMPIAR
+      setNombre("");
+      setDescripcion("");
+
+      fetchMaterias();
+
+    } catch (error: any) {
+
+      console.error(error);
+
+      alert(
+        error.message
+      );
+
+    } finally {
+
+      setCreating(false);
+
+    }
+  };
+
+  useEffect(() => {
 
     fetchMaterias();
+
   }, []);
 
-  // 🔄 LOADING
+  // ========================================
+  // LOADING
+  // ========================================
   if (loading) {
+
     return (
       <div className="p-6">
-        <p className="text-gray-600">
-          Cargando materias...
-        </p>
+        Cargando materias...
       </div>
     );
+
   }
 
-  // ❌ ERROR
-  if (error) {
-    return (
-      <div className="p-6">
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-          <p className="font-medium text-red-600">
-            Error cargando materias
-          </p>
-
-          <p className="mt-1 text-sm text-red-500">
-            {error}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // 📭 EMPTY STATE
-  if (materias.length === 0) {
-    return (
-      <div className="space-y-6">
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <h1 className="text-3xl font-bold text-gray-800">
-            Materias
-          </h1>
-
-          <p className="mt-2 text-gray-600">
-            Consulta el comportamiento académico por materia.
-          </p>
-        </section>
-
-        <section className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-sm">
-          <p className="text-gray-500">
-            No hay materias registradas.
-          </p>
-        </section>
-      </div>
-    );
-  }
-
+  // ========================================
+  // UI
+  // ========================================
   return (
-    <div className="space-y-6">
+
+    <div className="p-6 space-y-6">
+
       {/* HEADER */}
-      <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h1 className="text-3xl font-bold text-gray-800">
-          Materias
+      <section className="bg-white rounded-2xl shadow p-6">
+
+        <h1 className="text-3xl font-bold">
+          Gestión de materias 📘
         </h1>
 
-        <p className="mt-2 text-gray-600">
-          Consulta el comportamiento académico por materia.
+        <p className="text-gray-500 mt-1">
+          Administración académica de materias
         </p>
+
+      </section>
+
+      {/* FORM */}
+      <section className="bg-white rounded-2xl shadow p-6">
+
+        <h2 className="text-xl font-semibold mb-4">
+          Nueva materia
+        </h2>
+
+        <div className="grid md:grid-cols-2 gap-4">
+
+          {/* NOMBRE */}
+          <input
+            type="text"
+            placeholder="Ej: Programación Web"
+            value={nombre}
+            onChange={(e) =>
+              setNombre(
+                e.target.value
+              )
+            }
+            className="border rounded-xl p-3"
+          />
+
+          {/* DESCRIPCIÓN */}
+          <input
+            type="text"
+            placeholder="Descripción de la materia"
+            value={descripcion}
+            onChange={(e) =>
+              setDescripcion(
+                e.target.value
+              )
+            }
+            className="border rounded-xl p-3"
+          />
+
+        </div>
+
+        <button
+          onClick={crearMateria}
+          disabled={creating}
+          className="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl"
+        >
+          {
+            creating
+              ? "Creando..."
+              : "Crear materia"
+          }
+        </button>
+
       </section>
 
       {/* TABLA */}
-      <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left">
-            <thead>
-              <tr className="border-b border-gray-200 text-sm text-gray-500">
-                <th className="py-3 pr-4">Materia</th>
-                <th className="py-3 pr-4">Docente</th>
-                <th className="py-3 pr-4">Promedio</th>
-                <th className="py-3 pr-4">Estatus</th>
-                <th className="py-3 pr-4">Acción</th>
-              </tr>
-            </thead>
+      <section className="bg-white rounded-2xl shadow p-6">
 
-            <tbody>
-              {(materias ?? []).map((m) => (
-                <tr
-                  key={m?.id}
-                  className="border-b border-gray-100"
-                >
-                  <td className="py-4 pr-4 font-medium text-gray-800">
-                    {m?.nombre ?? "Sin nombre"}
-                  </td>
+        <h2 className="text-xl font-semibold mb-4">
+          Materias registradas
+        </h2>
 
-                  <td className="py-4 pr-4 text-gray-600">
-                    {m?.docente ?? "Sin docente"}
-                  </td>
+        {
+          materias.length === 0 ? (
 
-                  <td className="py-4 pr-4">
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-700">
-                      {m?.promedio ?? 0}
-                    </span>
-                  </td>
+            <p className="text-gray-500">
+              No hay materias registradas
+            </p>
 
-                  <td className="py-4 pr-4">
-                    <span
-                      className={`rounded-full px-3 py-1 text-sm font-medium ${
-                        m?.estatus === "Alto"
-                          ? "bg-green-100 text-green-700"
-                          : m?.estatus === "Estable"
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-amber-100 text-amber-700"
-                      }`}
-                    >
-                      {m?.estatus ?? "Sin estatus"}
-                    </span>
-                  </td>
+          ) : (
 
-                  <td className="py-4 pr-4">
-                    <button className="rounded-lg bg-slate-100 px-3 py-2 text-sm transition hover:bg-slate-200">
-                      Ver detalle
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            <div className="overflow-x-auto">
+
+              <table className="w-full">
+
+                <thead>
+
+                  <tr className="border-b">
+
+                    <th className="text-left p-3">
+                      Materia
+                    </th>
+
+                    <th className="text-left p-3">
+                      Descripción
+                    </th>
+
+                  </tr>
+
+                </thead>
+
+                <tbody>
+
+                  {
+                    materias.map((m) => (
+
+                      <tr
+                        key={m.id}
+                        className="border-b"
+                      >
+
+                        <td className="p-3 font-medium">
+                          {m.nombre}
+                        </td>
+
+                        <td className="p-3">
+                          {
+                            m.descripcion ||
+                            "-"
+                          }
+                        </td>
+
+                      </tr>
+
+                    ))
+                  }
+
+                </tbody>
+
+              </table>
+
+            </div>
+
+          )
+        }
+
       </section>
+
     </div>
+
   );
 }

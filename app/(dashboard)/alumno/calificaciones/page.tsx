@@ -8,12 +8,20 @@ export default function AlumnoCalificacionesPage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const token = localStorage.getItem("token");
-      const user = JSON.parse(localStorage.getItem("user") || "{}");
-
       try {
+        const token =
+          localStorage.getItem("token");
+
+        const user = JSON.parse(
+          localStorage.getItem("user") || "{}"
+        );
+
+        const alumnoId =
+          user?.alumnoId ||
+          user?.id;
+
         const res = await fetch(
-          `http://localhost:4000/api/calificaciones/alumno/${user.id}`,
+          `http://localhost:4000/api/calificaciones/alumno/${alumnoId}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -21,49 +29,101 @@ export default function AlumnoCalificacionesPage() {
           }
         );
 
-        const result = await res.json();
+        const response =
+          await res.json();
 
-console.log("RESULT BACKEND:", result);
+        console.log(
+          "RESULT BACKEND:",
+          response
+        );
 
-// 🔥 VALIDACIÓN
-if (!Array.isArray(result)) {
-  console.error("Backend no regresó array:", result);
-  setData([]);
-  return;
-}
+        if (!res.ok) {
+          throw new Error(
+            response?.message ||
+              "Error cargando calificaciones"
+          );
+        }
 
-        // 🔥 TRANSFORMACIÓN
+        const result =
+          response?.data || [];
+
+        if (!Array.isArray(result)) {
+          console.error(
+            "Backend no regresó array:",
+            result
+          );
+
+          setData([]);
+          return;
+        }
+
+        // ==================================
+        // AGRUPAR POR MATERIA
+        // ==================================
+
         const agrupado: any = {};
 
-        result.forEach((item: any) => {
-          const materia = item.materia.nombre;
+        (result ?? []).forEach(
+          (item: any) => {
+            const materia =
+              item?.materia?.nombre ||
+              "Materia";
 
-          if (!agrupado[materia]) {
-            agrupado[materia] = {
-              materia,
-              P1: null,
-              P2: null,
-              P3: null,
-              FINAL: null,
-            };
+            if (!agrupado[materia]) {
+              agrupado[materia] = {
+                materia,
+
+                P1: null,
+                P2: null,
+                P3: null,
+
+                FINAL: null,
+              };
+            }
+
+            agrupado[materia][
+              item?.tipo || "P1"
+            ] =
+              item?.calificacion ?? 0;
           }
+        );
 
-          agrupado[materia][item.tipo] = item.calificacion;
-        });
+        // ==================================
+        // CALCULAR PROMEDIO
+        // ==================================
 
-        // 🔥 CALCULAR FINAL Y ESTADO
-        const finalData = Object.values(agrupado).map((m: any) => {
-          const valores = [m.P1, m.P2, m.P3].filter(v => v !== null);
+        const finalData = Object.values(
+          agrupado
+        ).map((m: any) => {
+          const valores = [
+            m.P1,
+            m.P2,
+            m.P3,
+          ].filter(
+            (v) =>
+              v !== null &&
+              v !== undefined
+          );
 
           const promedio =
             valores.length > 0
-              ? valores.reduce((a, b) => a + b, 0) / valores.length
+              ? valores.reduce(
+                  (a: number, b: number) =>
+                    a + Number(b),
+                  0
+                ) / valores.length
               : 0;
 
           return {
             ...m,
-            FINAL: promedio.toFixed(1),
-            estado: promedio >= 6 ? "Aprobado" : "Reprobado",
+
+            FINAL:
+              promedio.toFixed(1),
+
+            estado:
+              promedio >= 6
+                ? "Aprobado"
+                : "Reprobado",
           };
         });
 
@@ -71,6 +131,8 @@ if (!Array.isArray(result)) {
 
       } catch (error) {
         console.error(error);
+
+        setData([]);
       } finally {
         setLoading(false);
       }
@@ -79,78 +141,158 @@ if (!Array.isArray(result)) {
     fetchData();
   }, []);
 
-  if (loading) return <p className="p-6">Cargando...</p>;
+  if (loading) {
+    return (
+      <p className="p-6">
+        Cargando...
+      </p>
+    );
+  }
 
-  // 🔥 MÉTRICAS
-  const materias = data.length;
-  const aprobadas = data.filter((m) => m.estado === "Aprobado").length;
-  const mejor = Math.max(...data.map((m) => Number(m.FINAL)));
+  // ==================================
+  // MÉTRICAS
+  // ==================================
+
+  const materias =
+    data?.length ?? 0;
+
+  const aprobadas =
+    (data ?? []).filter(
+      (m) =>
+        m.estado === "Aprobado"
+    ).length;
+
+  const mejor =
+    (data ?? []).length > 0
+      ? Math.max(
+          ...(data ?? []).map((m) =>
+            Number(m?.FINAL || 0)
+          )
+        )
+      : 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
 
-      <h1 className="text-3xl font-bold">Calificaciones</h1>
+      {/* HEADER */}
+      <section className="bg-white p-6 rounded-2xl shadow">
+        <h1 className="text-3xl font-bold">
+          Calificaciones
+        </h1>
+
+        <p className="text-gray-500">
+          Consulta de desempeño académico
+        </p>
+      </section>
 
       {/* RESUMEN */}
-      <div className="grid md:grid-cols-3 gap-4">
+      <section className="grid md:grid-cols-3 gap-4">
+
         <div className="bg-white p-4 rounded-xl shadow">
-          <p className="text-sm text-gray-500">Materias cursadas</p>
-          <h2 className="text-2xl font-bold">{materias}</h2>
+          <p className="text-sm text-gray-500">
+            Materias cursadas
+          </p>
+
+          <h2 className="text-2xl font-bold">
+            {materias}
+          </h2>
         </div>
 
         <div className="bg-white p-4 rounded-xl shadow">
-          <p className="text-sm text-gray-500">Materias aprobadas</p>
-          <h2 className="text-2xl font-bold">{aprobadas}</h2>
+          <p className="text-sm text-gray-500">
+            Materias aprobadas
+          </p>
+
+          <h2 className="text-2xl font-bold">
+            {aprobadas}
+          </h2>
         </div>
 
         <div className="bg-white p-4 rounded-xl shadow">
-          <p className="text-sm text-gray-500">Mejor calificación</p>
-          <h2 className="text-2xl font-bold">{mejor}</h2>
+          <p className="text-sm text-gray-500">
+            Mejor calificación
+          </p>
+
+          <h2 className="text-2xl font-bold">
+            {mejor}
+          </h2>
         </div>
-      </div>
+
+      </section>
 
       {/* TABLA */}
-      <div className="bg-white p-6 rounded-2xl shadow">
+      <section className="bg-white p-6 rounded-2xl shadow">
+
         <h2 className="text-lg font-semibold mb-4">
           Detalle por materia
         </h2>
 
-        <table className="w-full text-left">
-          <thead>
-            <tr className="text-gray-500 border-b">
-              <th>Materia</th>
-              <th>P1</th>
-              <th>P2</th>
-              <th>P3</th>
-              <th>Final</th>
-              <th>Estado</th>
-            </tr>
-          </thead>
+        <div className="overflow-x-auto">
 
-          <tbody>
-            {data.map((m, i) => (
-              <tr key={i} className="border-b">
-                <td>{m.materia}</td>
-                <td>{m.P1 || "-"}</td>
-                <td>{m.P2 || "-"}</td>
-                <td>{m.P3 || "-"}</td>
-                <td className="font-semibold">{m.FINAL}</td>
-                <td>
-                  <span
-                    className={`px-3 py-1 rounded-full text-sm ${
-                      m.estado === "Aprobado"
-                        ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-700"
-                    }`}
-                  >
-                    {m.estado}
-                  </span>
-                </td>
+          <table className="w-full text-left">
+
+            <thead>
+              <tr className="text-gray-500 border-b">
+                <th>Materia</th>
+                <th>P1</th>
+                <th>P2</th>
+                <th>P3</th>
+                <th>Final</th>
+                <th>Estado</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+
+            <tbody>
+
+              {(data ?? []).map(
+                (m, i) => (
+                  <tr
+                    key={i}
+                    className="border-b"
+                  >
+                    <td>
+                      {m?.materia}
+                    </td>
+
+                    <td>
+                      {m?.P1 ?? "-"}
+                    </td>
+
+                    <td>
+                      {m?.P2 ?? "-"}
+                    </td>
+
+                    <td>
+                      {m?.P3 ?? "-"}
+                    </td>
+
+                    <td className="font-semibold">
+                      {m?.FINAL}
+                    </td>
+
+                    <td>
+                      <span
+                        className={`px-3 py-1 rounded-full text-sm ${
+                          m?.estado ===
+                          "Aprobado"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-red-100 text-red-700"
+                        }`}
+                      >
+                        {m?.estado}
+                      </span>
+                    </td>
+                  </tr>
+                )
+              )}
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </section>
 
     </div>
   );

@@ -1,185 +1,241 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-export default function PagosPage() {
-  const [alumnos, setAlumnos] = useState<any[]>([]);
-  const [selectedAlumno, setSelectedAlumno] = useState<any>(null);
-  const [pagos, setPagos] = useState<any[]>([]);
+type Pago = {
+  id?: string;
+  concepto?: string;
+  monto?: number | string | null;
+  estatus?: string;
+  createdAt?: string;
+  alumno?: {
+    matricula?: string;
+    user?: {
+      name?: string;
+    };
+  };
+};
 
-  const [form, setForm] = useState({
-    concepto: "",
-    monto: ""
+function normalizeData(result: any): Pago[] {
+  if (Array.isArray(result)) return result;
+
+  if (Array.isArray(result?.pagos)) {
+    return result.pagos;
+  }
+
+  if (Array.isArray(result?.data)) {
+    return result.data;
+  }
+
+  if (Array.isArray(result?.data?.pagos)) {
+    return result.data.pagos;
+  }
+
+  return [];
+}
+
+function money(value: unknown) {
+  const number = Number(value ?? 0);
+
+  if (Number.isNaN(number)) return "$0.00";
+
+  return number.toLocaleString("es-MX", {
+    style: "currency",
+    currency: "MXN",
   });
+}
 
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+export default function CajaCobrosPage() {
+  const [pagos, setPagos] = useState<Pago[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  // 🔍 cargar alumnos
-  const fetchAlumnos = async () => {
-    const res = await fetch("http://localhost:4000/api/alumnos", {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    const data = await res.json();
-    setAlumnos(data);
-  };
-
-  // 📄 cargar pagos
-  const fetchPagos = async (alumnoId: string) => {
-    const res = await fetch(`http://localhost:4000/api/pagos/${alumnoId}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    const data = await res.json();
-    setPagos(data);
-  };
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
-    fetchAlumnos();
+    async function fetchPagos() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const token = localStorage.getItem("token");
+
+        const res = await fetch(
+          "http://localhost:4000/api/pagos",
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const response = await res.json();
+
+        if (!res.ok) {
+          throw new Error(
+            response?.message ||
+              "Error al cargar cobros"
+          );
+        }
+
+        const data = response?.data || [];
+
+        setPagos(normalizeData(data));
+      } catch (err: any) {
+        console.error(err);
+
+        setError(
+          err?.message ||
+            "Error interno del servidor"
+        );
+
+        setPagos([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchPagos();
   }, []);
 
-  // 💰 registrar pago
-  const handleSubmit = async (e: any) => {
-    e.preventDefault();
+  const pagosFiltrados = useMemo(() => {
+    return (pagos ?? []).filter((p) => {
+      const alumno =
+        p?.alumno?.user?.name?.toLowerCase() || "";
 
-    await fetch("http://localhost:4000/api/pagos", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        alumnoId: selectedAlumno.id,
-        concepto: form.concepto,
-        monto: parseFloat(form.monto)
-      })
+      const concepto =
+        p?.concepto?.toLowerCase() || "";
+
+      const query = search.toLowerCase();
+
+      return (
+        alumno.includes(query) ||
+        concepto.includes(query)
+      );
     });
+  }, [pagos, search]);
 
-    setForm({ concepto: "", monto: "" });
-    fetchPagos(selectedAlumno.id);
-  };
+  if (loading) {
+    return (
+      <div className="p-6">
+        <p>Cargando cobros...</p>
+      </div>
+    );
+  }
 
-  // 🔥 cálculos
-  const totalPagado = pagos.reduce((acc, p) => acc + p.monto, 0);
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
+          {error}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6 p-6">
+      <div className="rounded-2xl bg-white p-6 shadow-sm">
+        <h1 className="text-3xl font-bold">
+          Cobros
+        </h1>
 
-      <h1 className="text-2xl font-bold">Caja / Pagos</h1>
-
-      {/* 🔍 seleccionar alumno */}
-      <div className="bg-white p-4 rounded shadow">
-        <h2 className="font-semibold mb-2">Seleccionar alumno</h2>
-
-        <select
-          className="border p-2 w-full"
-          onChange={(e) => {
-            const alumno = alumnos.find(a => a.id === e.target.value);
-            setSelectedAlumno(alumno);
-            fetchPagos(alumno.id);
-          }}
-        >
-          <option>Selecciona un alumno</option>
-          {alumnos.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.user.name} - {a.matricula}
-            </option>
-          ))}
-        </select>
+        <p className="text-gray-500">
+          Gestión de pagos y cobros registrados
+        </p>
       </div>
 
-      {/* 📊 resumen */}
-      {selectedAlumno && (
-        <div className="grid md:grid-cols-3 gap-4">
-          <div className="bg-white p-4 rounded shadow">
-            <p>Total pagado</p>
-            <h2 className="text-xl font-bold">${totalPagado}</h2>
-          </div>
+      <div className="rounded-2xl bg-white p-6 shadow-sm">
+        <input
+          type="text"
+          placeholder="Buscar alumno o concepto..."
+          value={search}
+          onChange={(e) =>
+            setSearch(e.target.value)
+          }
+          className="w-full rounded-xl border p-3 outline-none focus:border-blue-500"
+        />
+      </div>
 
-          <div className="bg-white p-4 rounded shadow">
-            <p>Pagos registrados</p>
-            <h2 className="text-xl font-bold">{pagos.length}</h2>
-          </div>
+      <div className="rounded-2xl bg-white p-6 shadow-sm">
+        {(pagosFiltrados ?? []).length === 0 ? (
+          <p className="text-gray-500">
+            No hay cobros registrados.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="p-3">
+                    Alumno
+                  </th>
 
-          <div className="bg-white p-4 rounded shadow">
-            <p>Alumno</p>
-            <h2 className="text-xl font-bold">
-              {selectedAlumno.user.name}
-            </h2>
-          </div>
-        </div>
-      )}
+                  <th className="p-3">
+                    Concepto
+                  </th>
 
-      {/* 💰 registrar pago */}
-      {selectedAlumno && (
-        <div className="bg-white p-4 rounded shadow">
-          <h2 className="font-semibold mb-2">
-            Registrar pago
-          </h2>
+                  <th className="p-3">
+                    Monto
+                  </th>
 
-          <form onSubmit={handleSubmit} className="space-y-2">
-            <input
-              placeholder="Concepto"
-              value={form.concepto}
-              onChange={(e) =>
-                setForm({ ...form, concepto: e.target.value })
-              }
-              className="border p-2 w-full"
-            />
+                  <th className="p-3">
+                    Estatus
+                  </th>
 
-            <input
-              placeholder="Monto"
-              value={form.monto}
-              onChange={(e) =>
-                setForm({ ...form, monto: e.target.value })
-              }
-              className="border p-2 w-full"
-            />
-
-            <button className="bg-green-600 text-white px-4 py-2 rounded">
-              Registrar pago
-            </button>
-          </form>
-        </div>
-      )}
-
-      {/* 📄 historial */}
-      {pagos.length > 0 && (
-        <div className="bg-white p-4 rounded shadow">
-          <h2 className="font-semibold mb-2">Historial</h2>
-
-          <table className="w-full text-sm">
-            <thead>
-              <tr>
-                <th>Concepto</th>
-                <th>Monto</th>
-                <th>Fecha</th>
-                <th>Estado</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {pagos.map((p) => (
-                <tr key={p.id}>
-                  <td>{p.concepto}</td>
-                  <td>${p.monto}</td>
-                  <td>
-                    {p.pagadoEn
-                      ? new Date(p.pagadoEn).toLocaleDateString()
-                      : "-"}
-                  </td>
-                  <td>
-                    {p.pagadoEn ? (
-                      <span className="text-green-600">Pagado</span>
-                    ) : (
-                      <span className="text-yellow-600">Pendiente</span>
-                    )}
-                  </td>
+                  <th className="p-3">
+                    Fecha
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+
+              <tbody>
+                {(pagosFiltrados ?? []).map(
+                  (p, index) => (
+                    <tr
+                      key={p?.id ?? index}
+                      className="border-b"
+                    >
+                      <td className="p-3">
+                        {p?.alumno?.user?.name ??
+                          "Sin alumno"}
+                      </td>
+
+                      <td className="p-3">
+                        {p?.concepto ??
+                          "Sin concepto"}
+                      </td>
+
+                      <td className="p-3 font-semibold">
+                        {money(p?.monto)}
+                      </td>
+
+                      <td className="p-3">
+                        <span className="rounded-full bg-blue-100 px-3 py-1 text-sm text-blue-700">
+                          {p?.estatus ??
+                            "PENDIENTE"}
+                        </span>
+                      </td>
+
+                      <td className="p-3">
+                        {p?.createdAt
+                          ? new Date(
+                              p.createdAt
+                            ).toLocaleDateString(
+                              "es-MX"
+                            )
+                          : "-"}
+                      </td>
+                    </tr>
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

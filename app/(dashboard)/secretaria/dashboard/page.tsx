@@ -1,95 +1,178 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { apiFetch } from "@/lib/apiClient";
 
-type SecretariaDashboardData = {
-  inscripcionesHoy: number;
-  documentosPendientes: number;
-  constanciasHoy: number;
-  tramitesActivos: number;
+type Alumno = {
+  id?: string;
 };
 
-const defaultData: SecretariaDashboardData = {
-  inscripcionesHoy: 0,
-  documentosPendientes: 0,
-  constanciasHoy: 0,
-  tramitesActivos: 0,
+type Grupo = {
+  id?: string;
 };
 
-function normalizeDashboard(result: any): SecretariaDashboardData {
-  const source = result?.data ?? result ?? {};
+type Documento = {
+  id?: string;
+};
 
-  return {
-    inscripcionesHoy: Number(source?.inscripcionesHoy ?? 0),
-    documentosPendientes: Number(source?.documentosPendientes ?? 0),
-    constanciasHoy: Number(source?.constanciasHoy ?? 0),
-    tramitesActivos: Number(source?.tramitesActivos ?? 0),
-  };
+function normalizeArray(data: any): any[] {
+  if (Array.isArray(data)) return data;
+
+  if (Array.isArray(data?.data)) {
+    return data.data;
+  }
+
+  return [];
 }
 
 export default function SecretariaDashboardPage() {
-  const [data, setData] =
-    useState<SecretariaDashboardData>(defaultData);
+  const [alumnos, setAlumnos] = useState<
+    Alumno[]
+  >([]);
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [grupos, setGrupos] = useState<
+    Grupo[]
+  >([]);
+
+  const [documentos, setDocumentos] =
+    useState<Documento[]>([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [error, setError] =
+    useState("");
 
   useEffect(() => {
-    async function fetchDashboard() {
+    async function fetchData() {
       try {
         setLoading(true);
         setError("");
 
-        const result = await apiFetch(
-          "/api/secretaria/dashboard"
+        const token =
+          localStorage.getItem("token");
+
+        const headers = {
+          "Content-Type":
+            "application/json",
+
+          Authorization: `Bearer ${token}`,
+        };
+
+        const [
+          alumnosRes,
+          gruposRes,
+          documentosRes,
+        ] = await Promise.all([
+          fetch(
+            "http://localhost:4000/api/alumnos",
+            { headers }
+          ),
+
+          fetch(
+            "http://localhost:4000/api/grupos",
+            { headers }
+          ),
+
+          fetch(
+            "http://localhost:4000/api/documentos",
+            { headers }
+          ),
+        ]);
+
+        const alumnosJson =
+          await alumnosRes.json();
+
+        const gruposJson =
+          await gruposRes.json();
+
+        let documentosJson: any = [];
+
+        try {
+          documentosJson =
+            await documentosRes.json();
+        } catch {
+          documentosJson = [];
+        }
+
+        setAlumnos(
+          normalizeArray(
+            alumnosJson?.data ||
+              alumnosJson
+          )
         );
 
-        setData(normalizeDashboard(result));
+        setGrupos(
+          normalizeArray(
+            gruposJson?.data ||
+              gruposJson
+          )
+        );
+
+        setDocumentos(
+          normalizeArray(
+            documentosJson?.data ||
+              documentosJson
+          )
+        );
       } catch (err: any) {
-        console.error("Error dashboard secretaria:", err);
+        console.error(err);
 
         setError(
-          err?.message || "Error al cargar dashboard"
+          err?.message ||
+            "Error interno del servidor"
         );
 
-        setData(defaultData);
+        setAlumnos([]);
+        setGrupos([]);
+        setDocumentos([]);
       } finally {
         setLoading(false);
       }
     }
 
-    fetchDashboard();
+    fetchData();
   }, []);
 
   const resumen = useMemo(
     () => [
       {
-        title: "Inscripciones del día",
-        value: data?.inscripcionesHoy ?? 0,
-        description: "Registros realizados hoy",
+        title: "Alumnos",
+        value: alumnos?.length ?? 0,
+        description:
+          "Alumnos registrados",
       },
+
       {
-        title: "Documentos pendientes",
-        value: data?.documentosPendientes ?? 0,
-        description: "Archivos por validar",
+        title: "Grupos",
+        value: grupos?.length ?? 0,
+        description:
+          "Grupos académicos",
       },
+
       {
-        title: "Constancias generadas",
-        value: data?.constanciasHoy ?? 0,
-        description: "Emitidas hoy",
+        title: "Documentos",
+        value:
+          documentos?.length ?? 0,
+        description:
+          "Documentación cargada",
       },
+
       {
-        title: "Trámites activos",
-        value: data?.tramitesActivos ?? 0,
-        description: "Procesos administrativos",
+        title: "Inscripciones",
+        value: alumnos?.length ?? 0,
+        description:
+          "Inscripciones activas",
       },
     ],
-    [data]
+    [alumnos, grupos, documentos]
   );
 
   if (loading) {
-    return <p className="p-6">Cargando dashboard...</p>;
+    return (
+      <p className="p-6">
+        Cargando dashboard...
+      </p>
+    );
   }
 
   if (error) {
@@ -103,38 +186,38 @@ export default function SecretariaDashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* HEADER */}
+    <div className="space-y-6 p-6">
       <section className="rounded-2xl border bg-white p-6 shadow-sm">
         <h1 className="text-3xl font-bold">
           Dashboard de Secretaría
         </h1>
 
         <p className="text-gray-600">
-          Control general de trámites escolares
+          Control escolar y académico
         </p>
       </section>
 
-      {/* CARDS */}
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {resumen.map((item) => (
-          <div
-            key={item.title}
-            className="rounded-2xl border bg-white p-5 shadow"
-          >
-            <p className="text-sm text-gray-500">
-              {item.title}
-            </p>
+        {(resumen ?? []).map(
+          (item) => (
+            <div
+              key={item.title}
+              className="rounded-2xl border bg-white p-5 shadow"
+            >
+              <p className="text-sm text-gray-500">
+                {item.title}
+              </p>
 
-            <h2 className="mt-2 text-3xl font-bold">
-              {item?.value ?? 0}
-            </h2>
+              <h2 className="mt-2 text-3xl font-bold">
+                {item?.value ?? 0}
+              </h2>
 
-            <p className="mt-1 text-sm text-gray-500">
-              {item.description}
-            </p>
-          </div>
-        ))}
+              <p className="mt-1 text-sm text-gray-500">
+                {item.description}
+              </p>
+            </div>
+          )
+        )}
       </section>
     </div>
   );

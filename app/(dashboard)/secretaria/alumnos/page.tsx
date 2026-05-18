@@ -1,39 +1,129 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-export default function AlumnosPage() {
-  const [alumnos, setAlumnos] = useState<any[]>([]);
-  const [editing, setEditing] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+type Alumno = {
+  id?: string;
 
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    matricula: "",
-  });
+  matricula?: string;
 
-  // 🔄 GET
+  user?: {
+    name?: string;
+    email?: string;
+  };
+
+  grupo?: {
+    nombre?: string;
+  };
+
+  programa?: {
+    nombre?: string;
+  };
+
+  carrera?: {
+    nombre?: string;
+  };
+};
+
+function normalizeData(data: any): Alumno[] {
+  if (Array.isArray(data)) return data;
+
+  if (Array.isArray(data?.data)) {
+    return data.data;
+  }
+
+  return [];
+}
+
+export default function SecretariaAlumnosPage() {
+  const [alumnos, setAlumnos] =
+    useState<Alumno[]>([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [error, setError] =
+    useState("");
+
+  const [search, setSearch] =
+    useState("");
+
+  const [open, setOpen] =
+    useState(false);
+
+  //////////////////////////////////////////////////////
+  // 🔥 FORM
+  //////////////////////////////////////////////////////
+
+  const [name, setName] =
+    useState("");
+
+  const [email, setEmail] =
+    useState("");
+
+  const [matricula, setMatricula] =
+    useState("");
+
+  const [grupoId, setGrupoId] =
+    useState("");
+
+  const [programaId, setProgramaId] =
+    useState("");
+
+  const [carreraId, setCarreraId] =
+    useState("");
+
+  //////////////////////////////////////////////////////
+  // 🔥 GET ALUMNOS
+  //////////////////////////////////////////////////////
+
   const fetchAlumnos = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem("token");
+      setError("");
 
-      const res = await fetch("http://127.0.0.1:4000/api/alumnos", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const token =
+        localStorage.getItem("token");
 
-      const json = await res.json();
+      const res = await fetch(
+        "http://localhost:4000/api/alumnos",
+        {
+          method: "GET",
 
-      if (!res.ok) throw new Error(json.message);
+          headers: {
+            "Content-Type":
+              "application/json",
 
-      setAlumnos(json.data); // 🔥 importante
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const response =
+        await res.json();
+
+      if (!res.ok) {
+        throw new Error(
+          response?.message ||
+            "Error cargando alumnos"
+        );
+      }
+
+      const data =
+        response?.data || response;
+
+      setAlumnos(
+        normalizeData(data)
+      );
     } catch (err: any) {
       console.error(err);
-      setError(err.message);
+
+      setError(
+        err?.message ||
+          "Error interno del servidor"
+      );
+
+      setAlumnos([]);
     } finally {
       setLoading(false);
     }
@@ -43,183 +133,386 @@ export default function AlumnosPage() {
     fetchAlumnos();
   }, []);
 
-  // ➕ / ✏️ CREATE - UPDATE
-  const handleSubmit = async (e: any) => {
-    e.preventDefault();
+  //////////////////////////////////////////////////////
+  // 🔥 CREAR ALUMNO
+  //////////////////////////////////////////////////////
 
+  const crearAlumno = async () => {
     try {
-      const token = localStorage.getItem("token");
-
-      if (!form.name || !form.email || !form.matricula) {
-        return alert("Todos los campos son obligatorios");
-      }
-
-      const url = editing
-        ? `http://127.0.0.1:4000/api/alumnos/${editing.id}`
-        : "http://127.0.0.1:4000/api/alumnos";
-
-      const method = editing ? "PUT" : "POST";
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(form),
-      });
-
-      const json = await res.json();
-
-      if (!res.ok) throw new Error(json.message);
-
-      setEditing(null);
-      setForm({ name: "", email: "", matricula: "" });
-
-      fetchAlumnos();
-    } catch (err: any) {
-      console.error(err);
-      alert(err.message);
-    }
-  };
-
-  // 🗑️ DELETE
-  const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar alumno?")) return;
-
-    try {
-      const token = localStorage.getItem("token");
+      const token =
+        localStorage.getItem("token");
 
       const res = await fetch(
-        `http://127.0.0.1:4000/api/alumnos/${id}`,
+        "http://localhost:4000/api/alumnos",
         {
-          method: "DELETE",
+          method: "POST",
+
           headers: {
+            "Content-Type":
+              "application/json",
+
             Authorization: `Bearer ${token}`,
           },
+
+          body: JSON.stringify({
+            name,
+            email,
+            matricula,
+
+            grupoId:
+              grupoId || null,
+
+            programaId:
+              programaId || null,
+
+            carreraId:
+              carreraId || null,
+          }),
         }
       );
 
-      const json = await res.json();
+      const response =
+        await res.json();
 
-      if (!res.ok) throw new Error(json.message);
+      if (!res.ok) {
+        throw new Error(
+          response?.message ||
+            "Error creando alumno"
+        );
+      }
+
+      alert(`
+Alumno creado correctamente ✅
+
+Correo:
+${email}
+
+Contraseña temporal:
+${response.passwordTemporal}
+`);
+
+      setOpen(false);
+
+      setName("");
+      setEmail("");
+      setMatricula("");
+      setGrupoId("");
+      setProgramaId("");
+      setCarreraId("");
 
       fetchAlumnos();
     } catch (err: any) {
       console.error(err);
-      alert(err.message);
+
+      alert(
+        err?.message ||
+          "Error creando alumno"
+      );
     }
   };
 
-  // ✏️ EDIT
-  const handleEdit = (alumno: any) => {
-    setEditing(alumno);
+  //////////////////////////////////////////////////////
+  // 🔥 FILTRO
+  //////////////////////////////////////////////////////
 
-    setForm({
-      name: alumno.user?.name || "",
-      email: alumno.user?.email || "",
-      matricula: alumno.matricula || "",
-    });
-  };
+  const filtrados = useMemo(() => {
+    return (alumnos ?? []).filter(
+      (a) => {
+        const texto = `
+          ${a?.user?.name ?? ""}
+          ${a?.user?.email ?? ""}
+          ${a?.matricula ?? ""}
+        `.toLowerCase();
+
+        return texto.includes(
+          search.toLowerCase()
+        );
+      }
+    );
+  }, [alumnos, search]);
+
+  //////////////////////////////////////////////////////
+  // 🔥 LOADING
+  //////////////////////////////////////////////////////
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <p>Cargando alumnos...</p>
+      </div>
+    );
+  }
+
+  //////////////////////////////////////////////////////
+  // 🔥 ERROR
+  //////////////////////////////////////////////////////
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  //////////////////////////////////////////////////////
+  // 🔥 UI
+  //////////////////////////////////////////////////////
 
   return (
-    <div className="p-6 space-y-6">
-      {/* HEADER */}
-      <div>
-        <h1 className="text-2xl font-bold">Gestión de Alumnos</h1>
-        <p className="text-gray-500">Registro y administración</p>
-      </div>
+    <div className="space-y-6 p-6">
 
-      {/* ERROR */}
-      {error && (
-        <p className="text-red-500 bg-red-50 p-3 rounded">{error}</p>
+      {/* HEADER */}
+      <section className="flex items-center justify-between rounded-2xl bg-white p-6 shadow">
+
+        <div>
+          <h1 className="text-3xl font-bold">
+            Alumnos
+          </h1>
+
+          <p className="text-gray-500">
+            Gestión de alumnos registrados
+          </p>
+        </div>
+
+        <button
+          onClick={() => setOpen(true)}
+          className="rounded-xl bg-blue-600 px-4 py-3 text-white hover:bg-blue-700"
+        >
+          Nuevo alumno
+        </button>
+      </section>
+
+      {/* SEARCH */}
+      <section className="rounded-2xl bg-white p-6 shadow">
+        <input
+          type="text"
+          placeholder="Buscar alumno..."
+          value={search}
+          onChange={(e) =>
+            setSearch(e.target.value)
+          }
+          className="w-full rounded-xl border p-3 outline-none focus:border-blue-500"
+        />
+      </section>
+
+      {/* TABLE */}
+      <section className="rounded-2xl bg-white p-6 shadow">
+
+        {(filtrados ?? []).length ===
+        0 ? (
+          <p className="text-gray-500">
+            No hay alumnos registrados.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+
+              <thead>
+                <tr className="border-b text-gray-500">
+                  <th className="p-3">
+                    Matrícula
+                  </th>
+
+                  <th className="p-3">
+                    Nombre
+                  </th>
+
+                  <th className="p-3">
+                    Correo
+                  </th>
+
+                  <th className="p-3">
+                    Programa
+                  </th>
+
+                  <th className="p-3">
+                    Carrera
+                  </th>
+
+                  <th className="p-3">
+                    Grupo
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {(filtrados ?? []).map(
+                  (a) => (
+                    <tr
+                      key={a?.id}
+                      className="border-b"
+                    >
+                      <td className="p-3">
+                        {
+                          a?.matricula
+                        }
+                      </td>
+
+                      <td className="p-3">
+                        {
+                          a?.user
+                            ?.name
+                        }
+                      </td>
+
+                      <td className="p-3">
+                        {
+                          a?.user
+                            ?.email
+                        }
+                      </td>
+
+                      <td className="p-3">
+                        {a?.programa
+                          ?.nombre ||
+                          "-"}
+                      </td>
+
+                      <td className="p-3">
+                        {a?.carrera
+                          ?.nombre ||
+                          "-"}
+                      </td>
+
+                      <td className="p-3">
+                        {a?.grupo
+                          ?.nombre ||
+                          "Sin grupo"}
+                      </td>
+                    </tr>
+                  )
+                )}
+              </tbody>
+
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* MODAL */}
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl">
+
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="text-2xl font-bold">
+                Nuevo alumno
+              </h2>
+
+              <button
+                onClick={() =>
+                  setOpen(false)
+                }
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+
+              <input
+                type="text"
+                placeholder="Nombre"
+                value={name}
+                onChange={(e) =>
+                  setName(
+                    e.target.value
+                  )
+                }
+                className="rounded-xl border p-3"
+              />
+
+              <input
+                type="email"
+                placeholder="Correo"
+                value={email}
+                onChange={(e) =>
+                  setEmail(
+                    e.target.value
+                  )
+                }
+                className="rounded-xl border p-3"
+              />
+
+              <input
+                type="text"
+                placeholder="Matrícula"
+                value={matricula}
+                onChange={(e) =>
+                  setMatricula(
+                    e.target.value
+                  )
+                }
+                className="rounded-xl border p-3"
+              />
+
+              <input
+                type="text"
+                placeholder="Programa ID"
+                value={programaId}
+                onChange={(e) =>
+                  setProgramaId(
+                    e.target.value
+                  )
+                }
+                className="rounded-xl border p-3"
+              />
+
+              <input
+                type="text"
+                placeholder="Carrera ID"
+                value={carreraId}
+                onChange={(e) =>
+                  setCarreraId(
+                    e.target.value
+                  )
+                }
+                className="rounded-xl border p-3"
+              />
+
+              <input
+                type="text"
+                placeholder="Grupo ID"
+                value={grupoId}
+                onChange={(e) =>
+                  setGrupoId(
+                    e.target.value
+                  )
+                }
+                className="rounded-xl border p-3"
+              />
+
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+
+              <button
+                onClick={() =>
+                  setOpen(false)
+                }
+                className="rounded-xl border px-4 py-2"
+              >
+                Cancelar
+              </button>
+
+              <button
+                onClick={crearAlumno}
+                className="rounded-xl bg-blue-600 px-5 py-2 text-white hover:bg-blue-700"
+              >
+                Crear alumno
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
       )}
 
-      {/* FORM */}
-      <div className="bg-white p-4 rounded-xl shadow space-y-3">
-        <h2 className="font-semibold">
-          {editing ? "Editar Alumno" : "Nuevo Alumno"}
-        </h2>
-
-        <form onSubmit={handleSubmit} className="grid grid-cols-3 gap-3">
-          <input
-            placeholder="Nombre"
-            value={form.name}
-            onChange={(e) =>
-              setForm({ ...form, name: e.target.value })
-            }
-            className="border p-2 rounded"
-          />
-
-          <input
-            placeholder="Email"
-            value={form.email}
-            onChange={(e) =>
-              setForm({ ...form, email: e.target.value })
-            }
-            className="border p-2 rounded"
-          />
-
-          <input
-            placeholder="Matrícula"
-            value={form.matricula}
-            onChange={(e) =>
-              setForm({ ...form, matricula: e.target.value })
-            }
-            className="border p-2 rounded"
-          />
-
-          <button className="col-span-3 bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
-            {editing ? "Actualizar Alumno" : "Crear Alumno"}
-          </button>
-        </form>
-      </div>
-
-      {/* TABLA */}
-      <div className="bg-white rounded-xl p-4 shadow">
-        <h2 className="font-semibold mb-3">Lista de alumnos</h2>
-
-        {loading ? (
-          <p>Cargando...</p>
-        ) : (
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b text-gray-500">
-                <th className="py-2">Nombre</th>
-                <th>Email</th>
-                <th>Matrícula</th>
-                <th className="text-right">Acciones</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {alumnos.map((a) => (
-                <tr key={a.id} className="border-b hover:bg-gray-50">
-                  <td className="py-2">{a.user?.name}</td>
-                  <td>{a.user?.email}</td>
-                  <td>{a.matricula}</td>
-
-                  <td className="text-right space-x-2">
-                    <button
-                      onClick={() => handleEdit(a)}
-                      className="bg-yellow-400 text-white px-3 py-1 rounded"
-                    >
-                      Editar
-                    </button>
-
-                    <button
-                      onClick={() => handleDelete(a.id)}
-                      className="bg-red-500 text-white px-3 py-1 rounded"
-                    >
-                      Eliminar
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
     </div>
   );
 }
