@@ -27,16 +27,18 @@ export default function RootLayout({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    // 🔐 El token vive en una cookie httpOnly. Lo único observable
+    // desde el cliente es si quedó una sesión guardada.
+    const guardado = localStorage.getItem("user");
 
-    // 🔒 Si NO hay token → mandar a login
-    if (!token && pathname !== "/login") {
+    // 🔒 Si NO hay sesión → mandar a login
+    if (!guardado && pathname !== "/login") {
       router.push("/login");
     }
 
-    // 🔓 Si ya hay token y está en login → mandar a dashboard
-    if (token && pathname === "/login") {
-      const user = JSON.parse(localStorage.getItem("user") || "{}");
+    // 🔓 Si ya hay sesión y está en login → mandar a dashboard
+    if (guardado && pathname === "/login") {
+      const user = JSON.parse(guardado);
 
       const roleRoutes: any = {
   ADMIN: "/administrador/dashboard",

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { API_URL } from "@/lib/config";
+import { notificar } from "@/lib/notificar";
 
 type Alumno = {
   id?: string;
@@ -70,6 +72,19 @@ export default function SecretariaAlumnosPage() {
   const [programaId, setProgramaId] =
     useState("");
 
+  const [trayectoriaId, setTrayectoriaId] =
+    useState("");
+
+  // catálogos para los selectores del alta
+  const [programas, setProgramas] = useState<any[]>([]);
+  const [carreras, setCarreras] = useState<any[]>([]);
+  const [gruposCat, setGruposCat] = useState<any[]>([]);
+  const [trayectorias, setTrayectorias] = useState<any[]>([]);
+
+  // paginación del servidor
+  const [page, setPage] = useState(1);
+  const [meta, setMeta] = useState<any>({ total: 0, pages: 1 });
+
   const [carreraId, setCarreraId] =
     useState("");
 
@@ -82,19 +97,31 @@ export default function SecretariaAlumnosPage() {
       setLoading(true);
       setError("");
 
-      const token =
-        localStorage.getItem("token");
+      // 🔐 El token vive en una cookie httpOnly y no se puede leer desde aquí.
+  // Solo se comprueba que exista una sesión guardada.
+  const sesion =
+    typeof window !== "undefined"
+      ? localStorage.getItem("user")
+      : null;
+
+      // 🔥 La búsqueda y la paginación ahora las hace el servidor:
+      // traer el padrón completo no se sostiene con 3,000 alumnos.
+      const params = new URLSearchParams({
+        page: String(page),
+        perPage: "50",
+      });
+
+      if (search.trim()) params.set("search", search.trim());
 
       const res = await fetch(
-        "http://localhost:4000/api/alumnos",
+        `${API_URL}/api/alumnos?${params.toString()}`,
         {
           method: "GET",
 
+          credentials: "include",
           headers: {
             "Content-Type":
-              "application/json",
-
-            Authorization: `Bearer ${token}`,
+              "application/json"
           },
         }
       );
@@ -115,6 +142,8 @@ export default function SecretariaAlumnosPage() {
       setAlumnos(
         normalizeData(data)
       );
+
+      setMeta(response?.meta ?? { total: 0, pages: 1 });
     } catch (err: any) {
       console.error(err);
 
@@ -129,8 +158,52 @@ export default function SecretariaAlumnosPage() {
     }
   };
 
+  // El nivel del programa decide si aplican trayectorias.
+  const esPreparatoria = programas
+    .filter((p: any) => p.id === programaId)
+    .some(
+      (p: any) =>
+        p?.nivelAcademico?.clave === "PREPARATORIA" ||
+        (p?.nombre || "").toLowerCase().includes("bachiller")
+    );
+
   useEffect(() => {
-    fetchAlumnos();
+    // Pequeño retraso para no disparar una consulta por tecla.
+    const t = setTimeout(fetchAlumnos, 300);
+
+    return () => clearTimeout(t);
+  }, [page, search]);
+
+  // Catálogos del formulario de alta.
+  useEffect(() => {
+    const cargarCatalogos = async () => {
+      try {
+        const [rp, rc, rg, rt] = await Promise.all([
+          fetch(`${API_URL}/api/programas`, { credentials: "include" }),
+          fetch(`${API_URL}/api/carreras`, { credentials: "include" }),
+          fetch(`${API_URL}/api/grupos`, { credentials: "include" }),
+          fetch(`${API_URL}/api/trayectorias?soloPreparatoria=true`, {
+            credentials: "include",
+          }),
+        ]);
+
+        const [jp, jc, jg, jt] = await Promise.all([
+          rp.json(),
+          rc.json(),
+          rg.json(),
+          rt.json(),
+        ]);
+
+        setProgramas(Array.isArray(jp) ? jp : jp?.data ?? []);
+        setCarreras(Array.isArray(jc) ? jc : jc?.data ?? []);
+        setGruposCat(jg?.data ?? []);
+        setTrayectorias(jt?.data ?? []);
+      } catch {
+        // Los catálogos son opcionales: si fallan, el alta sigue disponible.
+      }
+    };
+
+    cargarCatalogos();
   }, []);
 
   //////////////////////////////////////////////////////
@@ -139,19 +212,16 @@ export default function SecretariaAlumnosPage() {
 
   const crearAlumno = async () => {
     try {
-      const token =
-        localStorage.getItem("token");
 
       const res = await fetch(
-        "http://localhost:4000/api/alumnos",
+        `${API_URL}/api/alumnos`,
         {
           method: "POST",
 
+          credentials: "include",
           headers: {
             "Content-Type":
-              "application/json",
-
-            Authorization: `Bearer ${token}`,
+              "application/json"
           },
 
           body: JSON.stringify({
@@ -167,6 +237,9 @@ export default function SecretariaAlumnosPage() {
 
             carreraId:
               carreraId || null,
+
+            trayectoriaId:
+              trayectoriaId || null,
           }),
         }
       );
@@ -181,7 +254,7 @@ export default function SecretariaAlumnosPage() {
         );
       }
 
-      alert(`
+      notificar(`
 Alumno creado correctamente ✅
 
 Correo:
@@ -189,7 +262,7 @@ ${email}
 
 Contraseña temporal:
 ${response.passwordTemporal}
-`);
+`, "exito");
 
       setOpen(false);
 
@@ -204,10 +277,10 @@ ${response.passwordTemporal}
     } catch (err: any) {
       console.error(err);
 
-      alert(
+      notificar(
         err?.message ||
           "Error creando alumno"
-      );
+      , "error");
     }
   };
 
@@ -295,7 +368,32 @@ ${response.passwordTemporal}
             setSearch(e.target.value)
           }
           className="w-full rounded-xl border p-3 outline-none focus:border-blue-500"
+          onKeyDown={() => setPage(1)}
         />
+
+        <div className="mt-3 flex items-center justify-between text-sm text-gray-500">
+          <span>
+            {meta.total ?? 0} alumno(s) · página {page} de {meta.pages || 1}
+          </span>
+
+          <div className="flex gap-2">
+            <button
+              disabled={page <= 1}
+              onClick={() => setPage(page - 1)}
+              className="rounded-lg border px-3 py-1 disabled:opacity-40"
+            >
+              Anterior
+            </button>
+
+            <button
+              disabled={page >= (meta.pages || 1)}
+              onClick={() => setPage(page + 1)}
+              className="rounded-lg border px-3 py-1 disabled:opacity-40"
+            >
+              Siguiente
+            </button>
+          </div>
+        </div>
       </section>
 
       {/* TABLE */}
@@ -450,41 +548,73 @@ ${response.passwordTemporal}
                 className="rounded-xl border p-3"
               />
 
-              <input
-                type="text"
-                placeholder="Programa ID"
+              {/* Antes eran campos de texto donde había que escribir
+                  el UUID a mano. Ahora son catálogos. */}
+              <select
                 value={programaId}
-                onChange={(e) =>
-                  setProgramaId(
-                    e.target.value
-                  )
-                }
+                onChange={(e) => {
+                  setProgramaId(e.target.value);
+                  // La trayectoria depende del nivel: al cambiar de
+                  // programa se limpia para no arrastrar una inválida.
+                  setTrayectoriaId("");
+                }}
                 className="rounded-xl border p-3"
-              />
+              >
+                <option value="">Programa...</option>
 
-              <input
-                type="text"
-                placeholder="Carrera ID"
+                {programas.map((p: any) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre}
+                  </option>
+                ))}
+              </select>
+
+              <select
                 value={carreraId}
-                onChange={(e) =>
-                  setCarreraId(
-                    e.target.value
-                  )
-                }
+                onChange={(e) => setCarreraId(e.target.value)}
                 className="rounded-xl border p-3"
-              />
+              >
+                <option value="">Carrera...</option>
 
-              <input
-                type="text"
-                placeholder="Grupo ID"
+                {carreras.map((c: any) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre}
+                  </option>
+                ))}
+              </select>
+
+              <select
                 value={grupoId}
-                onChange={(e) =>
-                  setGrupoId(
-                    e.target.value
-                  )
-                }
+                onChange={(e) => setGrupoId(e.target.value)}
                 className="rounded-xl border p-3"
-              />
+              >
+                <option value="">Grupo...</option>
+
+                {gruposCat.map((g: any) => (
+                  <option key={g.id} value={g.id}>
+                    {g.nombre}
+                  </option>
+                ))}
+              </select>
+
+              {/* 🔒 Las trayectorias solo aplican a preparatoria:
+                  el selector aparece únicamente si el programa
+                  seleccionado es de ese nivel. */}
+              {esPreparatoria && trayectorias.length > 0 && (
+                <select
+                  value={trayectoriaId}
+                  onChange={(e) => setTrayectoriaId(e.target.value)}
+                  className="rounded-xl border p-3"
+                >
+                  <option value="">Trayectoria...</option>
+
+                  {trayectorias.map((t: any) => (
+                    <option key={t.id} value={t.id}>
+                      {t.clave} — {t.nombre}
+                    </option>
+                  ))}
+                </select>
+              )}
 
             </div>
 

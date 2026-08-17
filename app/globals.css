@@ -1,14 +1,70 @@
 @import "tailwindcss";
 
+/**
+ * =========================================
+ * 🎨 TOKENS SIAC / CESZAM
+ * =========================================
+ *
+ * Identidad: azules y grises con toques amarillos.
+ *
+ * Los amarillos son ACENTO: destacan una acción o un dato,
+ * nunca son el fondo de una pantalla completa.
+ *
+ * Antes cada archivo redefinía sus radios, sombras y colores.
+ * Todo eso vive aquí.
+ */
+
 :root {
-  --background: #f3f4f6;
-  --foreground: #111827;
-  --card: #ffffff;
-  --border: #d1d5db;
-  --muted: #6b7280;
-  --muted-light: #9ca3af;
-  --primary: #0f172a;
-  --primary-hover: #1e293b;
+  /* superficies */
+  --siac-fondo: #f1f5f9;
+  --siac-superficie: #ffffff;
+  --siac-superficie-alt: #f8fafc;
+  --siac-borde: #e2e8f0;
+  --siac-borde-fuerte: #cbd5e1;
+
+  /* tinta */
+  --siac-tinta: #0f172a;
+  --siac-tinta-media: #475569;
+  --siac-tinta-suave: #94a3b8;
+
+  /* azul institucional */
+  --siac-azul: #1d4ed8;
+  --siac-azul-hover: #1e40af;
+  --siac-azul-suave: #eff6ff;
+  --siac-azul-borde: #bfdbfe;
+
+  /* gris profundo — encabezados y sidebar */
+  --siac-marino: #0f172a;
+  --siac-marino-claro: #1e293b;
+
+  /* acento amarillo */
+  --siac-ambar: #f59e0b;
+  --siac-ambar-fuerte: #b45309;
+  --siac-ambar-suave: #fffbeb;
+  --siac-ambar-borde: #fde68a;
+
+  /* estado — reservados, nunca se usan como color de serie */
+  --siac-bien: #15803d;
+  --siac-bien-suave: #f0fdf4;
+  --siac-alerta: #b45309;
+  --siac-alerta-suave: #fffbeb;
+  --siac-grave: #b91c1c;
+  --siac-grave-suave: #fef2f2;
+
+  /* forma */
+  --siac-radio: 1rem;
+  --siac-radio-sm: 0.625rem;
+  --siac-sombra: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.06);
+
+  /* compatibilidad con lo anterior */
+  --background: var(--siac-fondo);
+  --foreground: var(--siac-tinta);
+  --card: var(--siac-superficie);
+  --border: var(--siac-borde);
+  --muted: var(--siac-tinta-media);
+  --muted-light: var(--siac-tinta-suave);
+  --primary: var(--siac-marino);
+  --primary-hover: var(--siac-marino-claro);
 }
 
 @theme inline {
@@ -28,44 +84,46 @@ html {
 
 body {
   margin: 0;
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--siac-fondo);
+  color: var(--siac-tinta);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
 }
 
-/* textos base */
 h1,
 h2,
 h3,
 h4,
 h5,
 h6 {
-  color: #111827;
+  color: var(--siac-tinta);
   margin: 0;
 }
 
 p {
-  color: #374151;
+  color: var(--siac-tinta-media);
 }
 
 /* inputs y formularios */
 input,
 select,
 textarea {
-  background: #ffffff;
-  color: #1f2937;
-  border: 1px solid #d1d5db;
+  background: var(--siac-superficie);
+  color: var(--siac-tinta);
+  border: 1px solid var(--siac-borde-fuerte);
+  border-radius: var(--siac-radio-sm);
 }
 
 input::placeholder,
 textarea::placeholder {
-  color: #9ca3af;
+  color: var(--siac-tinta-suave);
 }
 
 input:focus,
 select:focus,
 textarea:focus {
   outline: none;
+  border-color: var(--siac-azul);
+  box-shadow: 0 0 0 3px rgb(29 78 216 / 0.12);
 }
 
 /* tablas */
@@ -74,21 +132,19 @@ table {
 }
 
 table th {
-  color: #374151;
+  color: var(--siac-tinta-media);
   font-weight: 600;
 }
 
 table td {
-  color: #111827;
+  color: var(--siac-tinta);
 }
 
-/* botones */
 button {
   font-family: inherit;
 }
 
-/* selección de texto */
 ::selection {
-  background: #cbd5e1;
-  color: #0f172a;
+  background: var(--siac-azul-borde);
+  color: var(--siac-marino);
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
 
 export default function AlumnoDocumentosPage() {
   const [docs, setDocs] = useState<any[]>([]);
@@ -12,8 +13,12 @@ export default function AlumnoDocumentosPage() {
       try {
         setLoading(true);
 
-        const token =
-          localStorage.getItem("token");
+        // 🔐 El token vive en una cookie httpOnly y no se puede leer desde aquí.
+  // Solo se comprueba que exista una sesión guardada.
+  const sesion =
+    typeof window !== "undefined"
+      ? localStorage.getItem("user")
+      : null;
 
         const user = JSON.parse(
           localStorage.getItem("user") || "{}"
@@ -23,7 +28,7 @@ export default function AlumnoDocumentosPage() {
           user?.alumnoId ||
           user?.id;
 
-        if (!token) {
+        if (!sesion) {
           throw new Error(
             "Token inválido"
           );
@@ -36,11 +41,9 @@ export default function AlumnoDocumentosPage() {
         }
 
         const res = await fetch(
-          `http://localhost:4000/api/documentos/${alumnoId}`,
+          `${API_URL}/api/documentos/${alumnoId}`,
           {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+            credentials: "include",
           }
         );
 

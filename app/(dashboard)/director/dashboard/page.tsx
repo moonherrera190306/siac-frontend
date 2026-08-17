@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { API_URL } from "@/lib/config";
 
 type DashboardData = {
   totalAlumnos: number;
@@ -42,14 +43,17 @@ export default function DirectorDashboardPage() {
         setLoading(true);
         setError("");
 
-        const token =
-          localStorage.getItem("token");
+        // 🔐 El token vive en una cookie httpOnly y no se puede leer desde aquí.
+  // Solo se comprueba que exista una sesión guardada.
+  const sesion =
+    typeof window !== "undefined"
+      ? localStorage.getItem("user")
+      : null;
 
-        const headers = {
-          "Content-Type":
-            "application/json",
-
-          Authorization: `Bearer ${token}`,
+        // 🔐 La cookie httpOnly viaja sola con credentials: "include".
+        const opciones: RequestInit = {
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
         };
 
         const [
@@ -58,18 +62,18 @@ export default function DirectorDashboardPage() {
           docentesRes,
         ] = await Promise.all([
           fetch(
-            "http://localhost:4000/api/alumnos",
-            { headers }
+            `${API_URL}/api/alumnos?perPage=1`,
+            opciones
           ),
 
           fetch(
-            "http://localhost:4000/api/grupos",
-            { headers }
+            `${API_URL}/api/grupos`,
+            opciones
           ),
 
           fetch(
-            "http://localhost:4000/api/docentes",
-            { headers }
+            `${API_URL}/api/docentes`,
+            opciones
           ),
         ]);
 
@@ -107,8 +111,10 @@ export default function DirectorDashboardPage() {
           );
 
         setData({
+          // 🔥 /api/alumnos ahora está paginado: el total real
+          // viene en meta, no en el largo de la página.
           totalAlumnos:
-            alumnos?.length ?? 0,
+            alumnosJson?.meta?.total ?? alumnos?.length ?? 0,
 
           totalGrupos:
             grupos?.length ?? 0,

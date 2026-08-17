@@ -1,131 +1,270 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
+import { notificar } from "@/lib/notificar";
+import { PageHeader, Card, Button, Vacio, Modal, Badge } from "@/components/ui";
 
 export default function AdministradorGruposPage() {
   const [grupos, setGrupos] = useState<any[]>([]);
+  const [turnos, setTurnos] = useState<any[]>([]);
+  const [semestres, setSemestres] = useState<any[]>([]);
+
+  const [detalle, setDetalle] = useState<any>(null);
+  const [cargandoDetalle, setCargandoDetalle] = useState(false);
+
+  const [abierto, setAbierto] = useState(false);
+  const [nuevo, setNuevo] = useState({
+    nombre: "",
+    turnoId: "",
+    semestreId: "",
+    cupo: "",
+  });
+  const [guardando, setGuardando] = useState(false);
+
   const [loading, setLoading] = useState(true);
 
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("token")
-      : null;
+  const cargar = async () => {
+    try {
+      setLoading(true);
+
+      const [rg, rt, rs] = await Promise.all([
+        fetch(`${API_URL}/api/grupos`, { credentials: "include" }),
+        fetch(`${API_URL}/api/turnos`, { credentials: "include" }),
+        fetch(`${API_URL}/api/semestres`, { credentials: "include" }),
+      ]);
+
+      const [jg, jt, js] = await Promise.all([rg.json(), rt.json(), rs.json()]);
+
+      if (!rg.ok) throw new Error(jg?.message || "Error al cargar grupos");
+
+      setGrupos(jg?.data ?? []);
+      setTurnos(jt?.data ?? []);
+      setSemestres(Array.isArray(js) ? js : js?.data ?? []);
+    } catch (e: any) {
+      notificar(e.message || "Error al cargar grupos", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (!token) {
-      window.location.href = "/login";
+    cargar();
+  }, []);
+
+  const crear = async () => {
+    if (!nuevo.nombre.trim()) {
+      notificar("El nombre del grupo es requerido", "alerta");
       return;
     }
 
-    const fetchGrupos = async () => {
-      try {
-        // 🔥 TRAER GRUPOS
-        const res = await fetch(
-          "http://localhost:4000",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+    setGuardando(true);
 
-        const gruposData = await res.json();
+    const res = await fetch(`${API_URL}/api/grupos`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(nuevo),
+    });
 
-        // 🔥 TRAER DETALLE DE CADA GRUPO
-        const gruposCompletos = await Promise.all(
-          gruposData.map(async (g: any) => {
-            const resGrupo = await fetch(
-              `http://localhost:4000/api/grupos/${g.id}`,
-              {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
-              }
-            );
+    const json = await res.json();
 
-            const grupoCompleto = await resGrupo.json();
+    setGuardando(false);
 
-            return {
-              id: g.id,
-              nombre: g.nombre,
-              alumnos: grupoCompleto.alumnos?.length || 0,
-              tutor:
-                grupoCompleto.materias?.[0]?.docente?.user?.name ||
-                "Sin asignar",
-              turno: "Matutino", // puedes mejorar después
-            };
-          })
-        );
+    if (!res.ok) {
+      notificar(json?.message || "No se pudo crear el grupo", "error");
+      return;
+    }
 
-        setGrupos(gruposCompletos);
+    notificar("Grupo creado", "exito");
+    setNuevo({ nombre: "", turnoId: "", semestreId: "", cupo: "" });
+    setAbierto(false);
+    cargar();
+  };
 
-      } catch (error) {
-        console.error(error);
-        alert("Error cargando grupos");
-      } finally {
-        setLoading(false);
-      }
-    };
+  const verDetalle = async (id: string) => {
+    try {
+      setCargandoDetalle(true);
 
-    fetchGrupos();
-  }, []);
+      const res = await fetch(`${API_URL}/api/grupos/${id}`, {
+        credentials: "include",
+      });
 
-  if (loading) return <p className="p-6">Cargando...</p>;
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json?.message || "Error al cargar el grupo");
+
+      setDetalle(json?.data ?? null);
+    } catch (e: any) {
+      notificar(e.message || "Error al cargar el grupo", "error");
+    } finally {
+      setCargandoDetalle(false);
+    }
+  };
+
+  if (loading) return <p className="p-2 text-slate-500">Cargando...</p>;
 
   return (
-    <div className="space-y-6">
+    <>
+      <PageHeader
+        titulo="Grupos"
+        descripcion={`${grupos.length} grupos activos`}
+      >
+        <Button onClick={() => setAbierto(true)}>Nuevo grupo</Button>
+      </PageHeader>
 
-      {/* HEADER */}
-      <section className="flex flex-col gap-4 rounded-2xl border bg-white p-6 shadow-sm md:flex-row md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Grupos</h1>
-          <p className="text-gray-500">
-            Organización académica
-          </p>
+      {grupos.length === 0 ? (
+        <Vacio
+          titulo="No hay grupos registrados."
+          pista="Crea uno con el botón de arriba."
+        />
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {grupos.map((g) => (
+            <Card key={g.id}>
+              <div className="flex items-start justify-between">
+                <h2 className="text-xl font-semibold">Grupo {g.nombre}</h2>
+
+                <Badge tono="info">{g.turno?.nombre ?? "Sin turno"}</Badge>
+              </div>
+
+              <p className="mt-2 text-sm text-slate-500">
+                {g.semestre?.nombre ?? "Sin semestre"}
+                {g.semestre?.carrera?.nombre
+                  ? ` · ${g.semestre.carrera.nombre}`
+                  : ""}
+              </p>
+
+              <p className="mt-1 text-sm text-slate-500">
+                {g._count?.alumnos ?? 0} alumno(s)
+                {g.cupo ? ` de ${g.cupo} de cupo` : ""}
+              </p>
+
+              <Button
+                variante="secundario"
+                className="mt-4 w-full"
+                onClick={() => verDetalle(g.id)}
+              >
+                Ver detalle
+              </Button>
+            </Card>
+          ))}
         </div>
+      )}
 
-        <button
-          onClick={() => alert("Crear grupo")}
-          className="bg-slate-900 text-white px-4 py-2 rounded-xl"
+      {cargandoDetalle && <p className="text-slate-500">Cargando detalle...</p>}
+
+      {detalle && (
+        <Modal
+          titulo={`Grupo ${detalle.nombre}`}
+          onClose={() => setDetalle(null)}
         >
-          Nuevo grupo
-        </button>
-      </section>
+          <p className="text-sm text-slate-500">
+            {detalle.semestre?.nombre ?? "Sin semestre"} ·{" "}
+            {detalle.turno?.nombre ?? "Sin turno"}
+          </p>
 
-      {/* CARDS */}
-      <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        {grupos.map((grupo) => (
-          <div
-            key={grupo.id}
-            className="bg-white p-5 rounded-2xl border shadow-sm"
-          >
-            <h2 className="text-xl font-semibold">
-              Grupo {grupo.nombre}
-            </h2>
+          <h3 className="mt-4 font-semibold">
+            Materias ({(detalle.asignaciones ?? []).length})
+          </h3>
 
-            <p className="mt-2 text-gray-600">
-              Alumnos: {grupo.alumnos}
+          {(detalle.asignaciones ?? []).length === 0 ? (
+            <p className="text-sm text-slate-500">
+              Sin materias asignadas todavía.
             </p>
+          ) : (
+            <ul className="mt-2 space-y-1 text-sm">
+              {detalle.asignaciones.map((a: any) => (
+                <li key={a.id} className="flex justify-between gap-4">
+                  <span>{a.materia?.nombre}</span>
+                  <span className="text-slate-500">
+                    {a.docente?.nombre || a.docente?.user?.name || "Sin docente"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
 
-            <p className="text-gray-600">
-              Tutor: {grupo.tutor}
-            </p>
+          <h3 className="mt-4 font-semibold">
+            Alumnos ({(detalle.alumnos ?? []).length})
+          </h3>
 
-            <p className="text-gray-600">
-              Turno: {grupo.turno}
-            </p>
+          {(detalle.alumnos ?? []).length === 0 ? (
+            <p className="text-sm text-slate-500">Sin alumnos inscritos.</p>
+          ) : (
+            <ul className="mt-2 max-h-52 space-y-1 overflow-y-auto text-sm">
+              {detalle.alumnos.map((a: any) => (
+                <li key={a.id} className="flex justify-between gap-4">
+                  <span className="text-slate-500">{a.matricula}</span>
+                  <span>{a.user?.name}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Modal>
+      )}
 
-            <button
-              onClick={() =>
-                alert(`Grupo ${grupo.nombre}`)
-              }
-              className="mt-4 bg-slate-900 text-white px-4 py-2 rounded-xl"
+      {abierto && (
+        <Modal titulo="Nuevo grupo" onClose={() => setAbierto(false)}>
+          <div className="grid gap-3 md:grid-cols-2">
+            <input
+              className="rounded-xl border border-slate-300 px-4 py-2"
+              placeholder="Nombre (1A, ADM-1...)"
+              value={nuevo.nombre}
+              onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })}
+            />
+
+            <input
+              type="number"
+              className="rounded-xl border border-slate-300 px-4 py-2"
+              placeholder="Cupo"
+              value={nuevo.cupo}
+              onChange={(e) => setNuevo({ ...nuevo, cupo: e.target.value })}
+            />
+
+            <select
+              className="rounded-xl border border-slate-300 px-4 py-2"
+              value={nuevo.turnoId}
+              onChange={(e) => setNuevo({ ...nuevo, turnoId: e.target.value })}
             >
-              Ver detalle
-            </button>
+              <option value="">Turno...</option>
+
+              {turnos.map((t: any) => (
+                <option key={t.id} value={t.id}>
+                  {t.nombre}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="rounded-xl border border-slate-300 px-4 py-2"
+              value={nuevo.semestreId}
+              onChange={(e) =>
+                setNuevo({ ...nuevo, semestreId: e.target.value })
+              }
+            >
+              <option value="">Semestre...</option>
+
+              {semestres.map((s: any) => (
+                <option key={s.id} value={s.id}>
+                  {s.nombre}
+                  {s.carrera?.nombre ? ` — ${s.carrera.nombre}` : ""}
+                </option>
+              ))}
+            </select>
           </div>
-        ))}
-      </section>
-    </div>
+
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variante="secundario" onClick={() => setAbierto(false)}>
+              Cancelar
+            </Button>
+
+            <Button onClick={crear} disabled={guardando}>
+              {guardando ? "Creando..." : "Crear grupo"}
+            </Button>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }

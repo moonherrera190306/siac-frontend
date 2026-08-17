@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
+import { notificar } from "@/lib/notificar";
 
 export default function DirectorDocentesPage() {
 
@@ -11,6 +13,18 @@ export default function DirectorDocentesPage() {
     useState("");
 
   const [email, setEmail] =
+    useState("");
+
+  const [cedula, setCedula] =
+    useState("");
+
+  const [rfc, setRfc] =
+    useState("");
+
+  const [telefono, setTelefono] =
+    useState("");
+
+  const [aviso, setAviso] =
     useState("");
 
   const [password, setPassword] =
@@ -29,16 +43,17 @@ export default function DirectorDocentesPage() {
 
     try {
 
-      const token =
-        localStorage.getItem("token");
+      // 🔐 El token vive en una cookie httpOnly y no se puede leer desde aquí.
+  // Solo se comprueba que exista una sesión guardada.
+  const sesion =
+    typeof window !== "undefined"
+      ? localStorage.getItem("user")
+      : null;
 
       const res = await fetch(
-        "http://localhost:4000/api/docentes",
+        `${API_URL}/api/docentes`,
         {
-          headers: {
-            Authorization:
-              `Bearer ${token}`
-          }
+          credentials: "include",
         }
       );
 
@@ -59,9 +74,9 @@ export default function DirectorDocentesPage() {
 
       console.error(error);
 
-      alert(
+      notificar(
         "Error obteniendo docentes"
-      );
+      , "error");
 
     } finally {
 
@@ -73,6 +88,29 @@ export default function DirectorDocentesPage() {
   // ========================================
   // ➕ CREAR DOCENTE
   // ========================================
+  // Un docente nunca se borra: se desactiva. El backend rechaza
+  // desactivar a quien todavía tiene asignaciones en el ciclo activo.
+  const cambiarEstado = async (id: string, activo: boolean) => {
+    setAviso("");
+
+    const res = await fetch(`${API_URL}/api/docentes/${id}/estado`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activo }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      notificar(json?.message || "No se pudo cambiar el estado", "error");
+      return;
+    }
+
+    setAviso(json?.message || "Estado actualizado");
+    fetchDocentes();
+  };
+
   const crearDocente = async () => {
 
     if (
@@ -81,9 +119,9 @@ export default function DirectorDocentesPage() {
       !password
     ) {
 
-      alert(
+      notificar(
         "Completa todos los campos"
-      );
+      , "alerta");
 
       return;
     }
@@ -92,30 +130,29 @@ export default function DirectorDocentesPage() {
 
       setCreating(true);
 
-      const token =
-        localStorage.getItem("token");
-
       const res = await fetch(
-        "http://localhost:4000/api/docentes",
+        `${API_URL}/api/docentes`,
         {
 
           method: "POST",
 
+          credentials: "include",
           headers: {
 
             "Content-Type":
-              "application/json",
-
-            Authorization:
-              `Bearer ${token}`
-
+              "application/json"
           },
 
           body: JSON.stringify({
 
             name: nombre,
             email,
-            password
+            password,
+
+            // Sin cédula ni RFC no se pueden emitir actas oficiales.
+            cedula,
+            rfc,
+            telefono
 
           })
 
@@ -134,9 +171,9 @@ export default function DirectorDocentesPage() {
 
       }
 
-      alert(
+      notificar(
         "✅ Docente creado"
-      );
+      , "exito");
 
       // 🔥 LIMPIAR
       setNombre("");
@@ -149,9 +186,9 @@ export default function DirectorDocentesPage() {
 
       console.error(error);
 
-      alert(
+      notificar(
         error.message
-      );
+      , "error");
 
     } finally {
 
@@ -247,7 +284,40 @@ export default function DirectorDocentesPage() {
             className="border rounded-xl p-3"
           />
 
+          {/* CÉDULA */}
+          <input
+            type="text"
+            placeholder="Cédula profesional"
+            value={cedula}
+            onChange={(e) => setCedula(e.target.value)}
+            className="border rounded-xl p-3"
+          />
+
+          {/* RFC */}
+          <input
+            type="text"
+            placeholder="RFC"
+            value={rfc}
+            onChange={(e) => setRfc(e.target.value)}
+            className="border rounded-xl p-3"
+          />
+
+          {/* TELÉFONO */}
+          <input
+            type="text"
+            placeholder="Teléfono"
+            value={telefono}
+            onChange={(e) => setTelefono(e.target.value)}
+            className="border rounded-xl p-3"
+          />
+
         </div>
+
+        {aviso && (
+          <p className="mt-3 rounded-xl bg-green-50 p-3 text-sm text-green-700">
+            {aviso}
+          </p>
+        )}
 
         <button
           onClick={crearDocente}
@@ -296,7 +366,19 @@ export default function DirectorDocentesPage() {
                     </th>
 
                     <th className="text-left p-3">
+                      Cédula
+                    </th>
+
+                    <th className="text-left p-3">
+                      RFC
+                    </th>
+
+                    <th className="text-left p-3">
                       Estado
+                    </th>
+
+                    <th className="text-left p-3">
+                      Acción
                     </th>
 
                   </tr>
@@ -328,6 +410,14 @@ export default function DirectorDocentesPage() {
                         </td>
 
                         <td className="p-3">
+                          {d?.cedula || "-"}
+                        </td>
+
+                        <td className="p-3">
+                          {d?.rfc || "-"}
+                        </td>
+
+                        <td className="p-3">
 
                           {
                             d?.user?.activo ? (
@@ -345,6 +435,17 @@ export default function DirectorDocentesPage() {
                             )
                           }
 
+                        </td>
+
+                        <td className="p-3">
+                          <button
+                            onClick={() =>
+                              cambiarEstado(d.id, !d?.activo)
+                            }
+                            className="rounded-lg border px-3 py-1 text-xs hover:bg-gray-50"
+                          >
+                            {d?.activo ? "Desactivar" : "Activar"}
+                          </button>
                         </td>
 
                       </tr>

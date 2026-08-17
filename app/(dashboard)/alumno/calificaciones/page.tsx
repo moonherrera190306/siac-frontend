@@ -1,299 +1,186 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
+
+const COLUMNAS = [
+  { id: "primerParcial", label: "PP" },
+  { id: "segundoParcial", label: "SP" },
+  { id: "promedio", label: "PROM" },
+  { id: "examenFinal", label: "EF" },
+  { id: "notaFinal", label: "O" },
+  { id: "extraordinario", label: "EE" },
+  { id: "adicional", label: "EA" },
+  { id: "especial", label: "EER" },
+  { id: "notaDefinitiva", label: "ND" },
+];
+
+const COLOR: Record<string, string> = {
+  APROBADA: "bg-green-100 text-green-700",
+  REPROBADA: "bg-red-100 text-red-700",
+  NO_PRESENTO: "bg-amber-100 text-amber-700",
+  EN_CURSO: "bg-gray-100 text-gray-600",
+};
 
 export default function AlumnoCalificacionesPage() {
-  const [data, setData] = useState<any[]>([]);
+  const [calificaciones, setCalificaciones] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [bloqueado, setBloqueado] = useState("");
 
   useEffect(() => {
-    const fetchData = async () => {
+    const cargar = async () => {
       try {
-        const token =
-          localStorage.getItem("token");
+        // El id sale del token, no de la URL.
+        const res = await fetch(`${API_URL}/api/calificaciones/alumno/me`, {
+          credentials: "include",
+        });
 
-        const user = JSON.parse(
-          localStorage.getItem("user") || "{}"
-        );
+        const json = await res.json();
 
-        const alumnoId =
-          user?.alumnoId ||
-          user?.id;
-
-        const res = await fetch(
-          `http://localhost:4000/api/calificaciones/alumno/${alumnoId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        const response =
-          await res.json();
-
-        console.log(
-          "RESULT BACKEND:",
-          response
-        );
-
-        if (!res.ok) {
-          throw new Error(
-            response?.message ||
-              "Error cargando calificaciones"
-          );
-        }
-
-        const result =
-          response?.data || [];
-
-        if (!Array.isArray(result)) {
-          console.error(
-            "Backend no regresó array:",
-            result
-          );
-
-          setData([]);
+        if (res.status === 403) {
+          // Bloqueo por adeudo: no es un error, es una regla.
+          setBloqueado(json?.message || "Acceso restringido");
           return;
         }
 
-        // ==================================
-        // AGRUPAR POR MATERIA
-        // ==================================
+        if (!res.ok) {
+          throw new Error(json?.message || "Error al cargar calificaciones");
+        }
 
-        const agrupado: any = {};
-
-        (result ?? []).forEach(
-          (item: any) => {
-            const materia =
-              item?.materia?.nombre ||
-              "Materia";
-
-            if (!agrupado[materia]) {
-              agrupado[materia] = {
-                materia,
-
-                P1: null,
-                P2: null,
-                P3: null,
-
-                FINAL: null,
-              };
-            }
-
-            agrupado[materia][
-              item?.tipo || "P1"
-            ] =
-              item?.calificacion ?? 0;
-          }
-        );
-
-        // ==================================
-        // CALCULAR PROMEDIO
-        // ==================================
-
-        const finalData = Object.values(
-          agrupado
-        ).map((m: any) => {
-          const valores = [
-            m.P1,
-            m.P2,
-            m.P3,
-          ].filter(
-            (v) =>
-              v !== null &&
-              v !== undefined
-          );
-
-          const promedio =
-            valores.length > 0
-              ? valores.reduce(
-                  (a: number, b: number) =>
-                    a + Number(b),
-                  0
-                ) / valores.length
-              : 0;
-
-          return {
-            ...m,
-
-            FINAL:
-              promedio.toFixed(1),
-
-            estado:
-              promedio >= 6
-                ? "Aprobado"
-                : "Reprobado",
-          };
-        });
-
-        setData(finalData);
-
-      } catch (error) {
-        console.error(error);
-
-        setData([]);
+        setCalificaciones(json?.data ?? []);
+      } catch (e: any) {
+        setError(e.message || "Error al cargar calificaciones");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
+    cargar();
   }, []);
 
-  if (loading) {
+  if (loading) return <p className="p-6">Cargando...</p>;
+
+  if (bloqueado) {
     return (
-      <p className="p-6">
-        Cargando...
-      </p>
+      <div className="rounded-3xl border bg-white p-8 text-center">
+        <h1 className="text-2xl font-bold">Calificaciones no disponibles</h1>
+        <p className="mt-2 text-gray-600">{bloqueado}</p>
+      </div>
     );
   }
 
-  // ==================================
-  // MÉTRICAS
-  // ==================================
+  // Agrupadas por ciclo, como en el kardex oficial.
+  const porCiclo = new Map<string, any[]>();
 
-  const materias =
-    data?.length ?? 0;
+  for (const c of calificaciones) {
+    const ciclo = c.cicloEscolar?.nombre || "Sin ciclo";
 
-  const aprobadas =
-    (data ?? []).filter(
-      (m) =>
-        m.estado === "Aprobado"
-    ).length;
+    if (!porCiclo.has(ciclo)) porCiclo.set(ciclo, []);
 
-  const mejor =
-    (data ?? []).length > 0
-      ? Math.max(
-          ...(data ?? []).map((m) =>
-            Number(m?.FINAL || 0)
-          )
-        )
-      : 0;
+    porCiclo.get(ciclo)!.push(c);
+  }
+
+  const numericas = calificaciones
+    .map((c) => c.notaDefinitiva)
+    .filter((n) => n !== null && n !== undefined && !isNaN(Number(n)))
+    .map(Number);
+
+  const promedioGeneral =
+    numericas.length === 0
+      ? null
+      : (numericas.reduce((a, b) => a + b, 0) / numericas.length).toFixed(1);
 
   return (
-    <div className="space-y-6 p-6">
-
-      {/* HEADER */}
-      <section className="bg-white p-6 rounded-2xl shadow">
-        <h1 className="text-3xl font-bold">
-          Calificaciones
-        </h1>
+    <div className="space-y-6">
+      <section className="rounded-3xl border bg-white p-6 shadow-sm">
+        <h1 className="text-3xl font-bold">Mis calificaciones</h1>
 
         <p className="text-gray-500">
-          Consulta de desempeño académico
+          {promedioGeneral === null
+            ? "Todavía no tienes calificaciones definitivas"
+            : `Promedio general: ${promedioGeneral}`}
         </p>
       </section>
 
-      {/* RESUMEN */}
-      <section className="grid md:grid-cols-3 gap-4">
+      {error && (
+        <p className="rounded-xl bg-red-50 p-4 text-red-600">{error}</p>
+      )}
 
-        <div className="bg-white p-4 rounded-xl shadow">
-          <p className="text-sm text-gray-500">
-            Materias cursadas
-          </p>
-
-          <h2 className="text-2xl font-bold">
-            {materias}
-          </h2>
+      {calificaciones.length === 0 && !error && (
+        <div className="rounded-3xl border bg-white p-8 text-center text-gray-500">
+          Todavía no hay calificaciones capturadas.
         </div>
+      )}
 
-        <div className="bg-white p-4 rounded-xl shadow">
-          <p className="text-sm text-gray-500">
-            Materias aprobadas
-          </p>
+      {Array.from(porCiclo.entries()).map(([ciclo, filas]) => (
+        <section
+          key={ciclo}
+          className="overflow-x-auto rounded-3xl border bg-white shadow-sm"
+        >
+          <h2 className="border-b px-5 py-4 text-lg font-semibold">{ciclo}</h2>
 
-          <h2 className="text-2xl font-bold">
-            {aprobadas}
-          </h2>
-        </div>
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50 text-gray-600">
+              <tr>
+                <th className="px-3 py-3">Clave</th>
+                <th className="px-3 py-3">Materia</th>
 
-        <div className="bg-white p-4 rounded-xl shadow">
-          <p className="text-sm text-gray-500">
-            Mejor calificación
-          </p>
+                {COLUMNAS.map((c) => (
+                  <th key={c.id} className="px-2 py-3 text-center">
+                    {c.label}
+                  </th>
+                ))}
 
-          <h2 className="text-2xl font-bold">
-            {mejor}
-          </h2>
-        </div>
-
-      </section>
-
-      {/* TABLA */}
-      <section className="bg-white p-6 rounded-2xl shadow">
-
-        <h2 className="text-lg font-semibold mb-4">
-          Detalle por materia
-        </h2>
-
-        <div className="overflow-x-auto">
-
-          <table className="w-full text-left">
-
-            <thead>
-              <tr className="text-gray-500 border-b">
-                <th>Materia</th>
-                <th>P1</th>
-                <th>P2</th>
-                <th>P3</th>
-                <th>Final</th>
-                <th>Estado</th>
+                <th className="px-3 py-3">Estatus</th>
               </tr>
             </thead>
 
             <tbody>
+              {filas.map((c) => (
+                <tr key={c.id} className="border-t">
+                  <td className="px-3 py-2 text-gray-400">
+                    {c.materia?.clave || "—"}
+                  </td>
 
-              {(data ?? []).map(
-                (m, i) => (
-                  <tr
-                    key={i}
-                    className="border-b"
-                  >
-                    <td>
-                      {m?.materia}
+                  <td className="px-3 py-2 font-medium">{c.materia?.nombre}</td>
+
+                  {COLUMNAS.map((col) => (
+                    <td
+                      key={col.id}
+                      className={`px-2 py-2 text-center ${
+                        col.id === "notaDefinitiva"
+                          ? "font-semibold text-slate-800"
+                          : ""
+                      }`}
+                    >
+                      {c[col.id] || "—"}
                     </td>
+                  ))}
 
-                    <td>
-                      {m?.P1 ?? "-"}
-                    </td>
-
-                    <td>
-                      {m?.P2 ?? "-"}
-                    </td>
-
-                    <td>
-                      {m?.P3 ?? "-"}
-                    </td>
-
-                    <td className="font-semibold">
-                      {m?.FINAL}
-                    </td>
-
-                    <td>
-                      <span
-                        className={`px-3 py-1 rounded-full text-sm ${
-                          m?.estado ===
-                          "Aprobado"
-                            ? "bg-green-100 text-green-700"
-                            : "bg-red-100 text-red-700"
-                        }`}
-                      >
-                        {m?.estado}
-                      </span>
-                    </td>
-                  </tr>
-                )
-              )}
-
+                  <td className="px-3 py-2">
+                    <span
+                      className={`rounded-full px-2 py-1 text-xs ${
+                        COLOR[c.estatus] || "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {(c.estatus || "").replace("_", " ")}
+                    </span>
+                  </td>
+                </tr>
+              ))}
             </tbody>
-
           </table>
+        </section>
+      ))}
 
-        </div>
-
-      </section>
-
+      {calificaciones.length > 0 && (
+        <p className="text-xs text-gray-400">
+          PP primer parcial · SP segundo parcial · PROM promedio · EF examen
+          final · O ordinario · EE extraordinario · EA adicional · EER especial ·
+          ND nota definitiva
+        </p>
+      )}
     </div>
   );
 }

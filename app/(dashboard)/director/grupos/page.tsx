@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
+import { notificar } from "@/lib/notificar";
 
 export default function DirectorGruposPage() {
 
@@ -35,18 +37,19 @@ export default function DirectorGruposPage() {
 
     try {
 
-      const token =
-        localStorage.getItem("token");
+      // 🔐 El token vive en una cookie httpOnly y no se puede leer desde aquí.
+  // Solo se comprueba que exista una sesión guardada.
+  const sesion =
+    typeof window !== "undefined"
+      ? localStorage.getItem("user")
+      : null;
 
       // 👥 GRUPOS
       const resGrupos =
         await fetch(
-          "http://localhost:4000/api/grupos",
+          `${API_URL}/api/grupos`,
           {
-            headers: {
-              Authorization:
-                `Bearer ${token}`
-            }
+            credentials: "include",
           }
         );
 
@@ -56,12 +59,9 @@ export default function DirectorGruposPage() {
       // 📚 SEMESTRES
       const resSemestres =
         await fetch(
-          "http://localhost:4000/api/semestres",
+          `${API_URL}/api/semestres`,
           {
-            headers: {
-              Authorization:
-                `Bearer ${token}`
-            }
+            credentials: "include",
           }
         );
 
@@ -93,9 +93,9 @@ export default function DirectorGruposPage() {
 
       console.error(error);
 
-      alert(
+      notificar(
         "Error cargando grupos"
-      );
+      , "error");
 
     } finally {
 
@@ -111,9 +111,9 @@ export default function DirectorGruposPage() {
 
     if (!nombre) {
 
-      alert(
+      notificar(
         "Nombre requerido"
-      );
+      , "alerta");
 
       return;
     }
@@ -122,23 +122,17 @@ export default function DirectorGruposPage() {
 
       setCreating(true);
 
-      const token =
-        localStorage.getItem("token");
-
       const res = await fetch(
-        "http://localhost:4000/api/grupos",
+        `${API_URL}/api/grupos`,
         {
 
           method: "POST",
 
+          credentials: "include",
           headers: {
 
             "Content-Type":
-              "application/json",
-
-            Authorization:
-              `Bearer ${token}`
-
+              "application/json"
           },
 
           body: JSON.stringify({
@@ -165,9 +159,9 @@ export default function DirectorGruposPage() {
 
       }
 
-      alert(
+      notificar(
         "✅ Grupo creado"
-      );
+      , "exito");
 
       // 🔥 LIMPIAR
       setNombre("");
@@ -181,9 +175,9 @@ export default function DirectorGruposPage() {
 
       console.error(error);
 
-      alert(
+      notificar(
         error.message
-      );
+      , "error");
 
     } finally {
 
@@ -412,11 +406,11 @@ export default function DirectorGruposPage() {
                         </td>
 
                         <td className="p-3">
-                          {g.turno || "-"}
+                          {g.turno?.nombre || "-"}
                         </td>
 
                         <td className="p-3">
-                          {g.nivel || "-"}
+                          {g.semestre?.carrera?.nombre || "-"}
                         </td>
 
                         <td className="p-3">

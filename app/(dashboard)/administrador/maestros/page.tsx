@@ -1,76 +1,116 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
+
+type Docente = {
+  id: string;
+  nombre?: string | null;
+  cedula?: string | null;
+  rfc?: string | null;
+  activo: boolean;
+  user?: { name?: string; email?: string };
+  asignaciones?: unknown[];
+};
+
 export default function AdministradorMaestrosPage() {
-  const maestros = [
-    { nombre: "Juan Pérez", especialidad: "Programación", grupos: 3, estado: "Activo" },
-    { nombre: "Laura Gómez", especialidad: "Historia", grupos: 2, estado: "Activo" },
-    { nombre: "Ana López", especialidad: "Ética", grupos: 2, estado: "Activo" },
-    { nombre: "Roberto Díaz", especialidad: "Matemáticas", grupos: 4, estado: "Activo" },
-  ];
+  const [docentes, setDocentes] = useState<Docente[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const cargar = async () => {
+      try {
+        // 🔥 Antes esta pantalla mostraba un array fijo de 4 maestros
+        // escrito a mano en el archivo.
+        const res = await fetch(`${API_URL}/api/docentes`, {
+          credentials: "include",
+        });
+
+        const json = await res.json();
+
+        if (!res.ok) {
+          throw new Error(json?.message || "Error al cargar maestros");
+        }
+
+        setDocentes(json?.data ?? []);
+      } catch (e: any) {
+        setError(e.message || "Error al cargar maestros");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    cargar();
+  }, []);
+
+  if (loading) return <p className="p-6">Cargando...</p>;
 
   return (
     <div className="space-y-6">
-      <section className="flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800">Maestros</h1>
-          <p className="mt-2 text-gray-600">
-            Gestiona docentes, materias y asignaciones.
-          </p>
-        </div>
-
-        <button className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
-          Nuevo maestro
-        </button>
+      <section className="rounded-2xl border bg-white p-6 shadow-sm">
+        <h1 className="text-3xl font-bold">Maestros</h1>
+        <p className="text-gray-500">Plantilla docente registrada</p>
       </section>
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="mb-4 flex flex-col gap-3 md:flex-row md:justify-between">
-          <input
-            type="text"
-            placeholder="Buscar maestro..."
-            className="rounded-xl border border-gray-300 px-4 py-2 text-sm"
-          />
-          <select className="rounded-xl border border-gray-300 px-4 py-2 text-sm">
-            <option>Todas las especialidades</option>
-            <option>Programación</option>
-            <option>Historia</option>
-            <option>Ética</option>
-            <option>Matemáticas</option>
-          </select>
-        </div>
+      {error && (
+        <p className="rounded-xl bg-red-50 p-4 text-red-600">{error}</p>
+      )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left">
-            <thead>
-              <tr className="border-b border-gray-200 text-sm text-gray-500">
-                <th className="py-3 pr-4 font-medium">Nombre</th>
-                <th className="py-3 pr-4 font-medium">Especialidad</th>
-                <th className="py-3 pr-4 font-medium">Grupos</th>
-                <th className="py-3 pr-4 font-medium">Estado</th>
-                <th className="py-3 pr-4 font-medium">Acciones</th>
+      {!error && docentes.length === 0 && (
+        <div className="rounded-2xl border bg-white p-8 text-center text-gray-500">
+          No hay maestros registrados.
+        </div>
+      )}
+
+      {docentes.length > 0 && (
+        <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50 text-gray-600">
+              <tr>
+                <th className="px-4 py-3">Nombre</th>
+                <th className="px-4 py-3">Correo</th>
+                <th className="px-4 py-3">Cédula</th>
+                <th className="px-4 py-3">RFC</th>
+                <th className="px-4 py-3">Asignaciones</th>
+                <th className="px-4 py-3">Estado</th>
               </tr>
             </thead>
+
             <tbody>
-              {maestros.map((maestro) => (
-                <tr key={maestro.nombre} className="border-b border-gray-100">
-                  <td className="py-4 pr-4 font-medium text-gray-800">{maestro.nombre}</td>
-                  <td className="py-4 pr-4 text-gray-600">{maestro.especialidad}</td>
-                  <td className="py-4 pr-4 text-gray-600">{maestro.grupos}</td>
-                  <td className="py-4 pr-4">
-                    <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700">
-                      {maestro.estado}
-                    </span>
+              {docentes.map((d) => (
+                <tr key={d.id} className="border-t">
+                  <td className="px-4 py-3 font-medium">
+                    {d.nombre || d.user?.name || "Sin nombre"}
                   </td>
-                  <td className="py-4 pr-4">
-                    <div className="flex gap-2">
-                      <button className="rounded-lg bg-slate-100 px-3 py-2 text-sm">Ver</button>
-                      <button className="rounded-lg bg-slate-100 px-3 py-2 text-sm">Editar</button>
-                    </div>
+
+                  <td className="px-4 py-3">{d.user?.email || "—"}</td>
+
+                  <td className="px-4 py-3">{d.cedula || "—"}</td>
+
+                  <td className="px-4 py-3">{d.rfc || "—"}</td>
+
+                  <td className="px-4 py-3">
+                    {(d.asignaciones ?? []).length}
+                  </td>
+
+                  <td className="px-4 py-3">
+                    <span
+                      className={
+                        d.activo
+                          ? "rounded-full bg-green-100 px-3 py-1 text-xs text-green-700"
+                          : "rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600"
+                      }
+                    >
+                      {d.activo ? "Activo" : "Inactivo"}
+                    </span>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </section>
+      )}
     </div>
   );
 }

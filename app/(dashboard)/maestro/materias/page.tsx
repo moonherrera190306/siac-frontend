@@ -1,229 +1,135 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
 
-interface Materia {
+type Asignacion = {
   id: string;
-  nombre: string;
-  grupos: string[];
-  alumnos: number;
-  aula: string;
-}
+  materia?: {
+    id: string;
+    nombre?: string;
+    clave?: string | null;
+    tipo?: string;
+    tipoEvaluacion?: string;
+    creditos?: number | null;
+    horasSemana?: number | null;
+  };
+  grupo?: { nombre?: string };
+  cicloEscolar?: { nombre?: string };
+};
 
 export default function MaestroMateriasPage() {
-  const [materias, setMaterias] = useState<Materia[]>([]);
+  const [asignaciones, setAsignaciones] = useState<Asignacion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(
-    null
-  );
-
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("token")
-      : null;
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!token) {
-      window.location.href = "/login";
-      return;
-    }
-
-    const fetchMaterias = async () => {
+    const cargar = async () => {
       try {
-        setLoading(true);
-        setError(null);
+        // 🔥 Antes esta pantalla reutilizaba el endpoint de grupos y
+        // mostraba grupos como si fueran materias.
+        const res = await fetch(`${API_URL}/api/docentes/grupos`, {
+          credentials: "include",
+        });
 
-        // 🔥 TRAER GRUPOS DEL DOCENTE
-        const res = await fetch(
-          "http://localhost:4000/api/docentes/grupos",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        const json = await res.json();
 
-        const response =
-          await res.json();
+        if (!res.ok) {
+          throw new Error(json?.message || "Error cargando materias");
+        }
 
-        console.log(
-          "MATERIAS MAESTRO:",
-          response
-        );
-
-        const grupos = Array.isArray(
-          response?.data
-        )
-          ? response.data
-          : [];
-
-        // 🔥 TRANSFORMAR PARA UI
-        const materiasTransformadas =
-          grupos.map((g: any) => ({
-            id: g?.id,
-            nombre:
-              g?.nombre ??
-              "Sin nombre",
-
-            grupos: [
-              g?.nombre ??
-                "Sin grupo",
-            ],
-
-            alumnos:
-              g?.totalAlumnos ??
-              0,
-
-            aula:
-              "Aula asignada",
-          }));
-
-        setMaterias(
-          materiasTransformadas
-        );
-
-      } catch (err: any) {
-        console.error(
-          "ERROR MATERIAS:",
-          err
-        );
-
-        setError(
-          err?.message ||
-            "No se pudieron cargar las materias"
-        );
-
-        setMaterias([]);
+        setAsignaciones(json?.data ?? []);
+      } catch (e: any) {
+        setError(e.message || "Error cargando materias");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchMaterias();
+    cargar();
   }, []);
 
-  // 🔄 LOADING
-  if (loading) {
-    return (
-      <div className="p-6">
-        <p className="text-gray-600">
-          Cargando materias...
-        </p>
-      </div>
-    );
+  if (loading) return <p className="p-6">Cargando...</p>;
+
+  // Una materia puede impartirse a varios grupos: se agrupa por materia.
+  const porMateria = new Map<string, { materia: any; grupos: string[] }>();
+
+  for (const a of asignaciones) {
+    const id = a.materia?.id;
+
+    if (!id) continue;
+
+    if (!porMateria.has(id)) {
+      porMateria.set(id, { materia: a.materia, grupos: [] });
+    }
+
+    if (a.grupo?.nombre) {
+      porMateria.get(id)!.grupos.push(a.grupo.nombre);
+    }
   }
 
-  // ❌ ERROR
-  if (error) {
-    return (
-      <div className="p-6">
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-
-          <p className="font-medium text-red-600">
-            Error cargando materias
-          </p>
-
-          <p className="mt-1 text-sm text-red-500">
-            {error}
-          </p>
-
-        </div>
-      </div>
-    );
-  }
-
-  // 📭 EMPTY STATE
-  if (
-    (materias ?? []).length === 0
-  ) {
-    return (
-      <div className="space-y-6">
-
-        {/* HEADER */}
-        <section className="rounded-2xl border bg-white p-6 shadow-sm">
-
-          <h1 className="text-3xl font-bold">
-            Mis materias
-          </h1>
-
-          <p className="text-gray-600">
-            Materias asignadas en el periodo actual
-          </p>
-
-        </section>
-
-        {/* EMPTY */}
-        <section className="rounded-2xl border bg-white p-10 text-center shadow-sm">
-
-          <p className="text-gray-500">
-            No hay materias asignadas.
-          </p>
-
-        </section>
-
-      </div>
-    );
-  }
+  const materias = Array.from(porMateria.values());
 
   return (
     <div className="space-y-6">
-
-      {/* HEADER */}
-      <section className="rounded-2xl border bg-white p-6 shadow-sm">
-
-        <h1 className="text-3xl font-bold">
-          Mis materias
-        </h1>
-
-        <p className="text-gray-600">
-          Materias asignadas en el periodo actual
+      <section className="rounded-3xl border bg-white p-6 shadow-sm">
+        <h1 className="text-3xl font-bold">Mis materias</h1>
+        <p className="text-gray-500">
+          {materias.length} materia(s) en el ciclo activo
         </p>
-
       </section>
 
-      {/* GRID */}
-      <section className="grid gap-4 md:grid-cols-2">
+      {error && (
+        <p className="rounded-xl bg-red-50 p-4 text-red-600">{error}</p>
+      )}
 
-        {(materias ?? []).map(
-          (m) => (
-            <div
-              key={m?.id}
-              className="rounded-2xl border bg-white p-6 shadow-sm"
-            >
-              <h2 className="text-xl font-semibold">
-                {m?.nombre ??
-                  "Sin nombre"}
-              </h2>
+      {!error && materias.length === 0 && (
+        <div className="rounded-3xl border bg-white p-8 text-center text-gray-500">
+          No tienes materias asignadas en el ciclo activo.
+        </div>
+      )}
 
-              <p className="mt-3 text-gray-600">
-                Grupos:
-                {" "}
-                {(m?.grupos ??
-                  []).join(
-                  ", "
-                ) ||
-                  "Sin grupos"}
-              </p>
+      {materias.length > 0 && (
+        <div className="overflow-x-auto rounded-3xl border bg-white shadow-sm">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50 text-gray-600">
+              <tr>
+                <th className="px-4 py-3">Clave</th>
+                <th className="px-4 py-3">Materia</th>
+                <th className="px-4 py-3">Tipo</th>
+                <th className="px-4 py-3">Evaluación</th>
+                <th className="px-4 py-3">Créditos</th>
+                <th className="px-4 py-3">Horas</th>
+                <th className="px-4 py-3">Grupos</th>
+              </tr>
+            </thead>
 
-              <p className="text-gray-600">
-                Total alumnos:
-                {" "}
-                {m?.alumnos ??
-                  0}
-              </p>
+            <tbody>
+              {materias.map(({ materia, grupos }) => (
+                <tr key={materia.id} className="border-t">
+                  <td className="px-4 py-3">{materia.clave || "—"}</td>
 
-              <p className="text-gray-600">
-                Aula:
-                {" "}
-                {m?.aula ??
-                  "Sin aula"}
-              </p>
-            </div>
-          )
-        )}
+                  <td className="px-4 py-3 font-medium">{materia.nombre}</td>
 
-      </section>
+                  <td className="px-4 py-3">{materia.tipo || "—"}</td>
 
+                  <td className="px-4 py-3">
+                    {materia.tipoEvaluacion === "ACREDITACION"
+                      ? "AC / NA"
+                      : "1 - 10"}
+                  </td>
+
+                  <td className="px-4 py-3">{materia.creditos ?? "—"}</td>
+
+                  <td className="px-4 py-3">{materia.horasSemana ?? "—"}</td>
+
+                  <td className="px-4 py-3">{grupos.join(", ") || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

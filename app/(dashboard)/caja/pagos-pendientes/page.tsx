@@ -1,270 +1,237 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-
-type Pago = {
-  id?: string;
-  concepto?: string;
-  monto?: number | string | null;
-  pagadoEn?: string | null;
-  estatus?: string;
-
-  alumno?: {
-    matricula?: string;
-
-    user?: {
-      name?: string;
-    };
-  };
-};
-
-function normalizeData(result: any): Pago[] {
-  if (Array.isArray(result)) return result;
-
-  if (Array.isArray(result?.pagos)) {
-    return result.pagos;
-  }
-
-  if (Array.isArray(result?.data)) {
-    return result.data;
-  }
-
-  if (Array.isArray(result?.data?.pagos)) {
-    return result.data.pagos;
-  }
-
-  return [];
-}
-
-function formatMoney(value: unknown) {
-  const number = Number(value ?? 0);
-
-  if (Number.isNaN(number)) {
-    return "$0.00";
-  }
-
-  return number.toLocaleString("es-MX", {
-    style: "currency",
-    currency: "MXN",
-  });
-}
+import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
 
 export default function CajaPagosPendientesPage() {
-  const [pagos, setPagos] = useState<Pago[]>([]);
+  const [adeudos, setAdeudos] = useState<any[]>([]);
+  const [meta, setMeta] = useState<any>({ total: 0, saldoTotal: 0 });
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [payingId, setPayingId] = useState("");
+  const [aviso, setAviso] = useState("");
 
-  async function fetchPagos() {
+  const [nuevo, setNuevo] = useState({
+    alumnoId: "",
+    descripcion: "",
+    monto: "",
+    fechaLimite: "",
+  });
+
+  const [alumnos, setAlumnos] = useState<any[]>([]);
+
+  const cargar = async () => {
     try {
       setLoading(true);
+
+      const [ra, ral] = await Promise.all([
+        fetch(`${API_URL}/api/pagos/adeudos/lista?perPage=200`, {
+          credentials: "include",
+        }),
+        fetch(`${API_URL}/api/alumnos?perPage=200`, { credentials: "include" }),
+      ]);
+
+      const [ja, jal] = await Promise.all([ra.json(), ral.json()]);
+
+      if (!ra.ok) throw new Error(ja?.message || "Error al cargar adeudos");
+
+      setAdeudos(ja?.data ?? []);
+      setMeta(ja?.meta ?? { total: 0, saldoTotal: 0 });
+      setAlumnos(jal?.data ?? []);
       setError("");
-
-      const token = localStorage.getItem("token");
-
-      const res = await fetch(
-        "http://localhost:4000/api/pagos",
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const response = await res.json();
-
-      if (!res.ok) {
-        throw new Error(
-          response?.message ||
-            "Error al cargar pagos"
-        );
-      }
-
-      const data = response?.data || [];
-
-      setPagos(normalizeData(data));
-    } catch (err: any) {
-      console.error(err);
-
-      setError(
-        err?.message ||
-          "Error interno del servidor"
-      );
-
-      setPagos([]);
+    } catch (e: any) {
+      setError(e.message || "Error al cargar adeudos");
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
-    fetchPagos();
+    cargar();
   }, []);
 
-  const pendientes = useMemo(() => {
-    return (pagos ?? []).filter((p) => {
-      return !p?.pagadoEn;
-    });
-  }, [pagos]);
+  const registrar = async () => {
+    setError("");
+    setAviso("");
 
-  async function pagar(id?: string) {
-    if (!id) return;
-
-    try {
-      setPayingId(id);
-
-      const token = localStorage.getItem("token");
-
-      const res = await fetch(
-        `http://localhost:4000/api/pagos/pagar/${id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const response = await res.json();
-
-      if (!res.ok) {
-        throw new Error(
-          response?.message ||
-            "Error al registrar pago"
-        );
-      }
-
-      await fetchPagos();
-    } catch (err: any) {
-      console.error(err);
-
-      alert(
-        err?.message ||
-          "No se pudo registrar el pago"
-      );
-    } finally {
-      setPayingId("");
+    if (!nuevo.alumnoId || !nuevo.monto) {
+      setError("El alumno y el monto son requeridos");
+      return;
     }
-  }
 
-  if (loading) {
-    return (
-      <div className="p-6">
-        <p>Cargando pagos pendientes...</p>
-      </div>
-    );
-  }
+    const res = await fetch(`${API_URL}/api/pagos/adeudos`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(nuevo),
+    });
 
-  if (error) {
-    return (
-      <div className="p-6">
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
-          {error}
-        </div>
-      </div>
-    );
-  }
+    const json = await res.json();
+
+    if (!res.ok) {
+      setError(json?.message || "No se pudo registrar el adeudo");
+      return;
+    }
+
+    setAviso("Adeudo registrado");
+    setNuevo({ alumnoId: "", descripcion: "", monto: "", fechaLimite: "" });
+    cargar();
+  };
+
+  if (loading) return <p className="p-6">Cargando...</p>;
+
+  const hoy = new Date();
 
   return (
-    <div className="space-y-6 p-6">
-      <section className="rounded-2xl bg-white p-6 shadow">
-        <h1 className="text-3xl font-bold">
-          Pagos pendientes
-        </h1>
+    <div className="space-y-6">
+      <section className="rounded-3xl border bg-white p-6 shadow-sm">
+        <h1 className="text-3xl font-bold">Adeudos</h1>
 
         <p className="text-gray-500">
-          Alumnos con adeudo activo
+          {meta.total ?? 0} adeudo(s) pendiente(s) · $
+          {Number(meta.saldoTotal ?? 0).toFixed(2)} por cobrar
+        </p>
+
+        <p className="mt-2 text-sm text-gray-400">
+          Un adeudo pendiente bloquea la consulta de calificaciones del alumno.
         </p>
       </section>
 
-      <section className="rounded-2xl bg-white p-6 shadow">
-        {(pendientes ?? []).length === 0 ? (
-          <p className="text-gray-500">
-            No hay pagos pendientes.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b text-gray-500">
-                  <th className="p-3">
-                    Alumno
-                  </th>
+      {error && (
+        <p className="rounded-xl bg-red-50 p-4 text-red-600">{error}</p>
+      )}
 
-                  <th className="p-3">
-                    Concepto
-                  </th>
+      {aviso && (
+        <p className="rounded-xl bg-green-50 p-4 text-green-700">{aviso}</p>
+      )}
 
-                  <th className="p-3">
-                    Monto
-                  </th>
+      <section className="rounded-3xl border bg-white p-5 shadow-sm">
+        <h2 className="mb-3 font-semibold">Registrar adeudo</h2>
 
-                  <th className="p-3">
-                    Estado
-                  </th>
+        <div className="grid gap-3 md:grid-cols-5">
+          <select
+            className="rounded-xl border border-gray-300 px-3 py-2 md:col-span-2"
+            value={nuevo.alumnoId}
+            onChange={(e) => setNuevo({ ...nuevo, alumnoId: e.target.value })}
+          >
+            <option value="">Alumno...</option>
 
-                  <th className="p-3">
-                    Acción
-                  </th>
-                </tr>
-              </thead>
+            {alumnos.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.matricula} — {a.user?.name}
+              </option>
+            ))}
+          </select>
 
-              <tbody>
-                {(pendientes ?? []).map(
-                  (p, index) => (
-                    <tr
-                      key={p?.id ?? index}
-                      className="border-b"
-                    >
-                      <td className="p-3 font-medium">
-                        {p?.alumno?.user
-                          ?.name ??
-                          "Alumno no disponible"}
-                      </td>
+          <input
+            className="rounded-xl border border-gray-300 px-3 py-2"
+            placeholder="Descripción"
+            value={nuevo.descripcion}
+            onChange={(e) => setNuevo({ ...nuevo, descripcion: e.target.value })}
+          />
 
-                      <td className="p-3">
-                        {p?.concepto ??
-                          "Sin concepto"}
-                      </td>
+          <input
+            type="number"
+            step="0.01"
+            className="rounded-xl border border-gray-300 px-3 py-2"
+            placeholder="Monto"
+            value={nuevo.monto}
+            onChange={(e) => setNuevo({ ...nuevo, monto: e.target.value })}
+          />
 
-                      <td className="p-3">
-                        {formatMoney(
-                          p?.monto
-                        )}
-                      </td>
+          <div className="flex gap-2">
+            <input
+              type="date"
+              className="w-full rounded-xl border border-gray-300 px-3 py-2"
+              value={nuevo.fechaLimite}
+              onChange={(e) =>
+                setNuevo({ ...nuevo, fechaLimite: e.target.value })
+              }
+            />
 
-                      <td className="p-3">
-                        <span className="rounded-full bg-yellow-100 px-3 py-1 text-sm text-yellow-700">
-                          Pendiente
-                        </span>
-                      </td>
-
-                      <td className="p-3">
-                        <button
-                          onClick={() =>
-                            pagar(p?.id)
-                          }
-                          disabled={
-                            payingId === p?.id
-                          }
-                          className="rounded-lg bg-green-600 px-4 py-2 text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {payingId === p?.id
-                            ? "Procesando..."
-                            : "Registrar pago"}
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                )}
-              </tbody>
-            </table>
+            <button
+              onClick={registrar}
+              className="rounded-xl bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+            >
+              +
+            </button>
           </div>
-        )}
+        </div>
       </section>
+
+      {adeudos.length === 0 ? (
+        <div className="rounded-3xl border bg-white p-8 text-center text-gray-500">
+          No hay adeudos pendientes.
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-3xl border bg-white shadow-sm">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50 text-gray-600">
+              <tr>
+                <th className="px-4 py-3">Alumno</th>
+                <th className="px-4 py-3">Grupo</th>
+                <th className="px-4 py-3">Concepto</th>
+                <th className="px-4 py-3">Saldo</th>
+                <th className="px-4 py-3">Vence</th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {adeudos.map((a) => {
+                const vencido =
+                  a.fechaLimite && new Date(a.fechaLimite) < hoy;
+
+                return (
+                  <tr key={a.id} className="border-t">
+                    <td className="px-4 py-3">
+                      {a.alumno?.user?.name}
+                      <span className="block text-xs text-gray-400">
+                        {a.alumno?.matricula}
+                      </span>
+                    </td>
+
+                    <td className="px-4 py-3">{a.alumno?.grupo?.nombre || "—"}</td>
+
+                    <td className="px-4 py-3">
+                      {a.descripcion || a.concepto?.nombre || "Adeudo"}
+                    </td>
+
+                    <td className="px-4 py-3 font-semibold">
+                      ${Number(a.saldo).toFixed(2)}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      {a.fechaLimite ? (
+                        <span
+                          className={
+                            vencido
+                              ? "rounded-full bg-red-100 px-3 py-1 text-xs text-red-700"
+                              : "text-gray-600"
+                          }
+                        >
+                          {new Date(a.fechaLimite).toLocaleDateString("es-MX")}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <a
+                        href="/caja/cobros"
+                        className="rounded-lg border px-3 py-1 text-xs hover:bg-gray-50"
+                      >
+                        Cobrar
+                      </a>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

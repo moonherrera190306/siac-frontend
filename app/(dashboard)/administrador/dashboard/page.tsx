@@ -136,8 +136,14 @@ export default function AdministradorDashboardPage() {
                 <p className="font-medium">
                   Pago de {item?.alumno?.user?.name ?? "Alumno no disponible"}
                 </p>
+                {/* `concepto` y `monto` ya no viven en Pago:
+                    los conceptos están en detalles y el importe es `total`. */}
                 <p className="text-sm text-gray-500">
-                  {item?.concepto ?? "Sin concepto"} - ${item?.monto ?? 0}
+                  {(item?.detalles ?? [])
+                    .map((d: any) => d?.concepto?.nombre)
+                    .filter(Boolean)
+                    .join(", ") || "Sin concepto"}{" "}
+                  — ${Number(item?.total ?? 0).toFixed(2)}
                 </p>
               </div>
             ))}

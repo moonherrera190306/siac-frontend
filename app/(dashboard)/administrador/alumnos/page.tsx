@@ -1,173 +1,320 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
+import { notificar } from "@/lib/notificar";
+import { PageHeader, Card, TableWrap, Badge, Button, Vacio, Modal } from "@/components/ui";
+
+const TONO_ESTATUS: Record<string, "bien" | "alerta" | "grave" | "info" | "neutro"> = {
+  ACTIVO: "bien",
+  BAJA_TEMPORAL: "alerta",
+  BAJA_DEFINITIVA: "grave",
+  EGRESADO: "info",
+};
 
 export default function AdministradorAlumnosPage() {
   const [alumnos, setAlumnos] = useState<any[]>([]);
-  const [search, setSearch] = useState("");
-  const [grupoFiltro, setGrupoFiltro] = useState("");
+  const [meta, setMeta] = useState<any>({ total: 0, pages: 1 });
 
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("token")
-      : null;
+  const [busqueda, setBusqueda] = useState("");
+  const [page, setPage] = useState(1);
 
-  // 🔥 TRAER ALUMNOS
+  const [detalle, setDetalle] = useState<any>(null);
+  const [editando, setEditando] = useState<any>(null);
+  const [guardando, setGuardando] = useState(false);
+
+  const [loading, setLoading] = useState(true);
+
+  const cargar = async () => {
+    try {
+      setLoading(true);
+
+      const params = new URLSearchParams({ page: String(page), perPage: "50" });
+
+      if (busqueda.trim()) params.set("search", busqueda.trim());
+
+      const res = await fetch(`${API_URL}/api/alumnos?${params}`, {
+        credentials: "include",
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json?.message || "Error al cargar alumnos");
+
+      setAlumnos(json?.data ?? []);
+      setMeta(json?.meta ?? { total: 0, pages: 1 });
+    } catch (e: any) {
+      notificar(e.message || "Error al cargar alumnos", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (!token) {
-      window.location.href = "/login";
+    const t = setTimeout(cargar, 300);
+    return () => clearTimeout(t);
+  }, [page, busqueda]);
+
+  const guardarEdicion = async () => {
+    setGuardando(true);
+
+    const res = await fetch(`${API_URL}/api/alumnos/${editando.id}`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: editando.nombre,
+        telefono: editando.telefono,
+        direccion: editando.direccion,
+        curp: editando.curp,
+        tutorNombre: editando.tutorNombre,
+        tutorTelefono: editando.tutorTelefono,
+      }),
+    });
+
+    const json = await res.json();
+
+    setGuardando(false);
+
+    if (!res.ok) {
+      notificar(json?.message || "No se pudo guardar", "error");
       return;
     }
 
-    fetch("http://localhost:4000/api/alumnos", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
-      .then((res) => res.json())
-      .then(setAlumnos)
-      .catch(() => alert("Error cargando alumnos"));
-  }, []);
+    notificar("Alumno actualizado", "exito");
+    setEditando(null);
+    cargar();
+  };
 
-  // 🔍 FILTROS
-  const alumnosFiltrados = alumnos.filter((a) => {
-    const nombre = a.user?.name.toLowerCase() || "";
-    const grupo = a.grupo?.nombre || "";
+  // 🔒 No borra: da de baja. El expediente, las calificaciones
+  // y los pagos deben conservarse.
+  const darBaja = async (a: any) => {
+    const motivo = window.prompt(`Motivo de la baja de ${a.user?.name}:`);
 
-    return (
-      nombre.includes(search.toLowerCase()) &&
-      (grupoFiltro === "" || grupo === grupoFiltro)
-    );
-  });
+    if (!motivo) return;
 
-  // 📊 OBTENER GRUPOS ÚNICOS
-  const gruposUnicos = [
-    ...new Set(alumnos.map((a) => a.grupo?.nombre).filter(Boolean)),
-  ];
+    const res = await fetch(`${API_URL}/api/alumnos/${a.id}`, {
+      method: "DELETE",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ motivo }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      notificar(json?.message || "No se pudo dar de baja", "error");
+      return;
+    }
+
+    notificar("Alumno dado de baja", "exito");
+    setDetalle(null);
+    cargar();
+  };
+
+  if (loading && alumnos.length === 0) {
+    return <p className="p-2 text-slate-500">Cargando...</p>;
+  }
 
   return (
-    <div className="space-y-6">
+    <>
+      <PageHeader
+        titulo="Alumnos"
+        descripcion={`${meta.total ?? 0} alumnos en el padrón`}
+      >
+        {/* El alta completa vive en Secretaría: ahí se asigna grupo,
+            carrera, trayectoria e inscripción en el mismo paso. */}
+        <a href="/secretaria/alumnos">
+          <Button>Dar de alta en Secretaría</Button>
+        </a>
+      </PageHeader>
 
-      {/* HEADER */}
-      <section className="flex flex-col gap-4 rounded-2xl border bg-white p-6 shadow-sm md:flex-row md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Alumnos</h1>
-          <p className="text-gray-500">
-            Gestión del padrón de alumnos
-          </p>
+      <Card>
+        <input
+          className="w-full rounded-xl border border-slate-300 px-4 py-2"
+          placeholder="Buscar por nombre, matrícula, CURP o correo"
+          value={busqueda}
+          onChange={(e) => {
+            setBusqueda(e.target.value);
+            setPage(1);
+          }}
+        />
+
+        <div className="mt-3 flex items-center justify-between text-sm text-slate-500">
+          <span>
+            Página {page} de {meta.pages || 1}
+          </span>
+
+          <div className="flex gap-2">
+            <Button
+              variante="secundario"
+              disabled={page <= 1}
+              onClick={() => setPage(page - 1)}
+            >
+              Anterior
+            </Button>
+
+            <Button
+              variante="secundario"
+              disabled={page >= (meta.pages || 1)}
+              onClick={() => setPage(page + 1)}
+            >
+              Siguiente
+            </Button>
+          </div>
         </div>
+      </Card>
 
-        <button
-          onClick={() => alert("Abrir modal crear alumno")}
-          className="rounded-xl bg-slate-900 px-4 py-2 text-white"
-        >
-          Nuevo alumno
-        </button>
-      </section>
-
-      {/* FILTROS */}
-      <section className="bg-white p-6 rounded-2xl shadow-sm">
-        <div className="flex flex-col md:flex-row gap-3 md:justify-between">
-
-          <input
-            type="text"
-            placeholder="Buscar alumno..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="border px-4 py-2 rounded-xl"
-          />
-
-          <select
-            value={grupoFiltro}
-            onChange={(e) => setGrupoFiltro(e.target.value)}
-            className="border px-4 py-2 rounded-xl"
-          >
-            <option value="">Todos los grupos</option>
-            {gruposUnicos.map((g) => (
-              <option key={g}>{g}</option>
-            ))}
-          </select>
-
-        </div>
-
-        {/* TABLA */}
-        <div className="overflow-x-auto mt-6">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b text-gray-500">
-                <th className="py-3">Nombre</th>
-                <th>Grupo</th>
-                <th>Matrícula</th>
-                <th>Estado</th>
-                <th>Acciones</th>
+      {alumnos.length === 0 ? (
+        <Vacio titulo="No hay alumnos con ese filtro." />
+      ) : (
+        <TableWrap>
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-slate-600">
+              <tr>
+                <th className="px-4 py-3">Matrícula</th>
+                <th className="px-4 py-3">Alumno</th>
+                <th className="px-4 py-3">Grupo</th>
+                <th className="px-4 py-3">Carrera</th>
+                <th className="px-4 py-3">Estatus</th>
+                <th className="px-4 py-3"></th>
               </tr>
             </thead>
 
             <tbody>
-              {alumnosFiltrados.map((a) => (
-                <tr key={a.id} className="border-b">
+              {alumnos.map((a) => (
+                <tr key={a.id} className="border-t border-slate-100">
+                  <td className="px-4 py-3 font-medium">{a.matricula}</td>
 
-                  <td className="py-4 font-medium">
+                  <td className="px-4 py-3">
                     {a.user?.name}
-                  </td>
-
-                  <td>
-                    {a.grupo?.nombre || "Sin grupo"}
-                  </td>
-
-                  <td>{a.matricula}</td>
-
-                  <td>
-                    <span
-                      className={`px-3 py-1 rounded-full text-sm ${
-                        a.user?.activo
-                          ? "bg-green-100 text-green-700"
-                          : "bg-red-100 text-red-700"
-                      }`}
-                    >
-                      {a.user?.activo ? "Activo" : "Baja"}
+                    <span className="block text-xs text-slate-400">
+                      {a.user?.email}
                     </span>
                   </td>
 
-                  <td>
-                    <div className="flex gap-2">
+                  <td className="px-4 py-3">{a.grupo?.nombre ?? "Sin grupo"}</td>
 
-                      <button
-                        onClick={() =>
-                          alert(JSON.stringify(a, null, 2))
-                        }
-                        className="bg-gray-100 px-3 py-1 rounded"
-                      >
-                        Ver
-                      </button>
+                  <td className="px-4 py-3">{a.carrera?.nombre ?? "—"}</td>
 
-                      <button
-                        onClick={() =>
-                          alert("Editar alumno")
-                        }
-                        className="bg-gray-100 px-3 py-1 rounded"
-                      >
-                        Editar
-                      </button>
-
-                      <button
-                        onClick={() =>
-                          alert("Dar de baja")
-                        }
-                        className="bg-red-50 text-red-600 px-3 py-1 rounded"
-                      >
-                        Baja
-                      </button>
-
-                    </div>
+                  <td className="px-4 py-3">
+                    <Badge tono={TONO_ESTATUS[a.estatusAcademico] ?? "neutro"}>
+                      {(a.estatusAcademico || "").replace("_", " ")}
+                    </Badge>
                   </td>
 
+                  <td className="px-4 py-3">
+                    <div className="flex gap-2">
+                      <Button
+                        variante="secundario"
+                        onClick={() => setDetalle(a)}
+                      >
+                        Ver
+                      </Button>
+
+                      <Button
+                        variante="secundario"
+                        onClick={() =>
+                          setEditando({
+                            id: a.id,
+                            nombre: a.user?.name ?? "",
+                            telefono: a.telefono ?? "",
+                            direccion: a.direccion ?? "",
+                            curp: a.curp ?? "",
+                            tutorNombre: a.tutorNombre ?? "",
+                            tutorTelefono: a.tutorTelefono ?? "",
+                          })
+                        }
+                      >
+                        Editar
+                      </Button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
-      </section>
-    </div>
+        </TableWrap>
+      )}
+
+      {detalle && (
+        <Modal
+          titulo={detalle.user?.name ?? "Alumno"}
+          onClose={() => setDetalle(null)}
+        >
+          <dl className="space-y-2 text-sm">
+            {[
+              ["Matrícula", detalle.matricula],
+              ["Correo", detalle.user?.email],
+              ["CURP", detalle.curp],
+              ["Teléfono", detalle.telefono],
+              ["Programa", detalle.programa?.nombre],
+              ["Carrera", detalle.carrera?.nombre],
+              ["Grupo", detalle.grupo?.nombre],
+              ["Trayectoria", detalle.trayectoria?.nombre],
+              ["Tutor", detalle.tutorNombre],
+              ["Tel. tutor", detalle.tutorTelefono],
+            ].map(([k, v]) => (
+              <div key={String(k)} className="flex justify-between gap-4">
+                <dt className="text-slate-500">{k}</dt>
+                <dd className="text-right">{v || "—"}</dd>
+              </div>
+            ))}
+          </dl>
+
+          <div className="mt-6 flex justify-end gap-2">
+            <a href={`/secretaria/expediente/${detalle.id}`}>
+              <Button variante="secundario">Ver expediente</Button>
+            </a>
+
+            {detalle.activo && (
+              <Button variante="peligro" onClick={() => darBaja(detalle)}>
+                Dar de baja
+              </Button>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {editando && (
+        <Modal titulo="Editar alumno" onClose={() => setEditando(null)}>
+          <div className="grid gap-3 md:grid-cols-2">
+            {[
+              ["nombre", "Nombre completo"],
+              ["curp", "CURP"],
+              ["telefono", "Teléfono"],
+              ["direccion", "Dirección"],
+              ["tutorNombre", "Nombre del tutor"],
+              ["tutorTelefono", "Teléfono del tutor"],
+            ].map(([campo, etiqueta]) => (
+              <input
+                key={campo}
+                className="rounded-xl border border-slate-300 px-4 py-2"
+                placeholder={etiqueta}
+                value={editando[campo] ?? ""}
+                onChange={(e) =>
+                  setEditando({ ...editando, [campo]: e.target.value })
+                }
+              />
+            ))}
+          </div>
+
+          <p className="mt-3 text-xs text-slate-500">
+            El grupo, la carrera y la matrícula se cambian desde Secretaría,
+            donde queda registrada la inscripción.
+          </p>
+
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variante="secundario" onClick={() => setEditando(null)}>
+              Cancelar
+            </Button>
+
+            <Button onClick={guardarEdicion} disabled={guardando}>
+              {guardando ? "Guardando..." : "Guardar"}
+            </Button>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }

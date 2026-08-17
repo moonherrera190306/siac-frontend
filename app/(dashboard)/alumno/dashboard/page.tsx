@@ -1,440 +1,280 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
+import { PageHeader, Card, Stat, Badge, Vacio, Button } from "@/components/ui";
+import { dinero } from "@/lib/format";
 
-type MateriaResumen = {
-  materia: string;
-  promedio: number;
+const DIAS = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO"];
+
+const ETIQUETA_DIA: Record<string, string> = {
+  LUNES: "Lunes",
+  MARTES: "Martes",
+  MIERCOLES: "Miércoles",
+  JUEVES: "Jueves",
+  VIERNES: "Viernes",
+  SABADO: "Sábado",
 };
 
-type CalificacionItem = {
-  calificacion?: number | string | null;
-
-  materia?: {
-    nombre?: string;
-  };
-};
-
-type PagoItem = {
-  id?: string;
-  pagadoEn?: string | null;
-  estatus?: string;
-};
-
-function getCurrentUserId() {
-  try {
-    const user = JSON.parse(
-      localStorage.getItem("user") || "{}"
-    );
-
-    return (
-      user?.alumnoId ||
-      user?.id ||
-      ""
-    );
-  } catch {
-    return "";
-  }
-}
-
-function normalizeArray(result: any) {
-  if (Array.isArray(result)) return result;
-
-  if (Array.isArray(result?.data))
-    return result.data;
-
-  if (
-    Array.isArray(
-      result?.calificaciones
-    )
-  )
-    return result.calificaciones;
-
-  if (Array.isArray(result?.pagos))
-    return result.pagos;
-
-  if (
-    Array.isArray(
-      result?.data?.calificaciones
-    )
-  )
-    return result.data.calificaciones;
-
-  if (
-    Array.isArray(
-      result?.data?.pagos
-    )
-  )
-    return result.data.pagos;
-
-  return [];
-}
-
-function toNumber(value: unknown) {
-  const n = Number(value ?? 0);
-
-  return Number.isFinite(n)
-    ? n
-    : 0;
-}
-
-function agruparMaterias(
-  calificaciones: CalificacionItem[]
-): MateriaResumen[] {
-  const agrupado: Record<
-    string,
-    number[]
-  > = {};
-
-  (calificaciones ?? []).forEach(
-    (item) => {
-      const materia =
-        item?.materia?.nombre ??
-        "Materia sin nombre";
-
-      const calificacion =
-        toNumber(
-          item?.calificacion
-        );
-
-      if (!agrupado[materia]) {
-        agrupado[materia] = [];
-      }
-
-      agrupado[materia].push(
-        calificacion
-      );
-    }
-  );
-
-  return Object.entries(
-    agrupado
-  ).map(([materia, califs]) => {
-    const suma = califs.reduce(
-      (acc, calif) =>
-        acc + calif,
-      0
-    );
-
-    const promedio =
-      califs.length > 0
-        ? suma / califs.length
-        : 0;
-
-    return {
-      materia,
-
-      promedio: Number(
-        promedio.toFixed(1)
-      ),
-    };
-  });
+function diaDeHoy() {
+  // getDay: 0 domingo … 6 sábado
+  return DIAS[new Date().getDay() - 1] ?? null;
 }
 
 export default function AlumnoDashboardPage() {
-  const [materias, setMaterias] =
-    useState<MateriaResumen[]>([]);
+  const [calificaciones, setCalificaciones] = useState<any[]>([]);
+  const [asistencia, setAsistencia] = useState<number | null>(null);
+  const [adeudo, setAdeudo] = useState(0);
+  const [horario, setHorario] = useState<any[]>([]);
+  const [bloqueado, setBloqueado] = useState("");
 
-  const [
-    pagosPendientes,
-    setPagosPendientes,
-  ] = useState(0);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState("");
-
-  const promedio = useMemo(() => {
-    if (
-      (materias ?? []).length === 0
-    )
-      return 0;
-
-    const suma = (
-      materias ?? []
-    ).reduce(
-      (acc, item) =>
-        acc +
-        toNumber(
-          item?.promedio
-        ),
-      0
-    );
-
-    return Number(
-      (
-        suma / materias.length
-      ).toFixed(1)
-    );
-  }, [materias]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    async function fetchData() {
+    const cargar = async () => {
       try {
-        setLoading(true);
-        setError("");
+        const guardado = localStorage.getItem("user");
 
-        const token =
-          localStorage.getItem(
-            "token"
-          );
+        if (!guardado) {
+          window.location.href = "/login";
+          return;
+        }
 
-        const userId =
-          getCurrentUserId();
+        const user = JSON.parse(guardado);
+        const alumnoId = user?.alumnoId;
 
-        if (!token) {
-          throw new Error(
-            "Token inválido"
+        // 🔥 El alumno usa /alumno/me: la ruta /alumno/:id es solo para
+        // el personal. Antes esta pantalla llamaba a la de staff y
+        // recibía 403, por eso el dashboard no cargaba nunca.
+        const [rc, ra, rp, rh] = await Promise.all([
+          fetch(`${API_URL}/api/calificaciones/alumno/me`, {
+            credentials: "include",
+          }),
+          fetch(`${API_URL}/api/asistencias/alumno/${alumnoId}`, {
+            credentials: "include",
+          }),
+          fetch(`${API_URL}/api/pagos/resumen/${alumnoId}`, {
+            credentials: "include",
+          }),
+          fetch(`${API_URL}/api/alumnos/horario/${alumnoId}`, {
+            credentials: "include",
+          }),
+        ]);
+
+        if (rc.status === 403) {
+          const jc = await rc.json();
+          setBloqueado(jc?.message || "Consulta restringida");
+        } else if (rc.ok) {
+          const jc = await rc.json();
+          setCalificaciones(jc?.data ?? []);
+        }
+
+        if (ra.ok) {
+          const ja = await ra.json();
+          const resumen = ja?.data?.resumen ?? [];
+
+          const conDato = resumen.filter((r: any) => r.porcentaje !== null);
+
+          setAsistencia(
+            conDato.length === 0
+              ? null
+              : Number(
+                  (
+                    conDato.reduce(
+                      (acc: number, r: any) => acc + Number(r.porcentaje),
+                      0
+                    ) / conDato.length
+                  ).toFixed(1)
+                )
           );
         }
 
-        if (!userId) {
-          throw new Error(
-            "No se encontró el usuario."
-          );
+        if (rp.ok) {
+          const jp = await rp.json();
+          setAdeudo(Number(jp?.data?.adeudo ?? 0));
         }
 
-        // =========================
-        // CALIFICACIONES
-        // =========================
+        if (rh.ok) {
+          const jh = await rh.json();
 
-        const resCal =
-          await fetch(
-            `http://localhost:4000/api/calificaciones/alumno/${userId}`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
+          const bloques: any[] = [];
+
+          for (const a of jh?.data ?? []) {
+            for (const h of a.horarios ?? []) {
+              bloques.push({
+                ...h,
+                materia: a.materia?.nombre,
+                docente: a.docente?.nombre || a.docente?.user?.name,
+              });
             }
-          );
+          }
 
-        const calificacionesResult =
-          await resCal.json();
-
-        if (!resCal.ok) {
-          throw new Error(
-            calificacionesResult?.message ||
-              "Error cargando calificaciones"
-          );
+          setHorario(bloques);
         }
-
-        const calificaciones =
-          normalizeArray(
-            calificacionesResult
-          ) as CalificacionItem[];
-
-        setMaterias(
-          agruparMaterias(
-            calificaciones
-          )
-        );
-
-        // =========================
-        // PAGOS
-        // =========================
-
-        const resPagos =
-          await fetch(
-            `http://localhost:4000/api/pagos/${userId}`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          );
-
-        const pagosResult =
-          await resPagos.json();
-
-        if (!resPagos.ok) {
-          throw new Error(
-            pagosResult?.message ||
-              "Error cargando pagos"
-          );
-        }
-
-        const pagos =
-          normalizeArray(
-            pagosResult
-          ) as PagoItem[];
-
-        const pendientes = (
-          pagos ?? []
-        ).filter(
-          (p) =>
-            !p?.pagadoEn &&
-            p?.estatus !==
-              "PAGADO"
-        );
-
-        setPagosPendientes(
-          pendientes.length
-        );
-
-      } catch (err: any) {
-        console.error(
-          "Error dashboard alumno:",
-          err
-        );
-
-        setError(
-          err?.message ||
-            "Error al cargar dashboard del alumno."
-        );
-
-        setMaterias([]);
-
-        setPagosPendientes(0);
+      } catch (e: any) {
+        setError(e.message || "Error al cargar el panel");
       } finally {
         setLoading(false);
       }
-    }
+    };
 
-    fetchData();
+    cargar();
   }, []);
 
-  if (loading) {
-    return (
-      <p className="p-6">
-        Cargando dashboard del alumno...
-      </p>
-    );
-  }
+  if (loading) return <p className="p-2 text-slate-500">Cargando...</p>;
 
-  if (error) {
-    return (
-      <div className="p-6">
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
-          {error}
-        </div>
-      </div>
-    );
-  }
+  const numericas = calificaciones
+    .map((c) => c.notaDefinitiva)
+    .filter((n) => n !== null && n !== undefined && !isNaN(Number(n)))
+    .map(Number);
+
+  const promedio =
+    numericas.length === 0
+      ? null
+      : (numericas.reduce((a, b) => a + b, 0) / numericas.length).toFixed(1);
+
+  const reprobadas = calificaciones.filter(
+    (c) => c.estatus === "REPROBADA"
+  ).length;
+
+  const hoy = diaDeHoy();
+
+  const clasesHoy = horario
+    .filter((b) => b.dia === hoy)
+    .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
 
   return (
-    <div className="space-y-6 p-6">
+    <>
+      <PageHeader
+        titulo="Mi panel"
+        descripcion={
+          hoy
+            ? `${ETIQUETA_DIA[hoy]} · ${clasesHoy.length} clase(s) hoy`
+            : "Hoy no hay clases programadas"
+        }
+      />
 
-      {/* HEADER */}
-      <section className="bg-white p-6 rounded-2xl shadow">
-        <h1 className="text-3xl font-bold">
-          Bienvenido, Alumno 🎓
-        </h1>
+      {error && (
+        <p className="rounded-xl bg-red-50 p-4 text-red-700">{error}</p>
+      )}
 
-        <p className="text-gray-500">
-          Panel académico estudiantil
-        </p>
-      </section>
+      <div className="grid gap-4 md:grid-cols-4">
+        <Stat
+          etiqueta="Promedio general"
+          valor={promedio ?? "—"}
+          nota={promedio ? `${numericas.length} materia(s)` : "Sin definitivas"}
+        />
 
-      {/* CARDS */}
-      <section className="grid gap-4 md:grid-cols-4">
+        <Stat
+          etiqueta="Asistencia"
+          valor={asistencia === null ? "—" : `${asistencia}%`}
+          nota={asistencia === null ? "Sin registros" : undefined}
+        />
 
-        <div className="rounded-xl bg-white p-4 shadow">
-          <p className="text-sm text-gray-500">
-            Promedio general
+        <Stat
+          etiqueta="Materias reprobadas"
+          valor={reprobadas}
+          acento={reprobadas > 0}
+        />
+
+        <Stat
+          etiqueta="Adeudo"
+          valor={dinero(adeudo)}
+          acento={adeudo > 0}
+          nota={adeudo > 0 ? "Bloquea tus calificaciones" : "Sin adeudos"}
+        />
+      </div>
+
+      {bloqueado && (
+        <Card className="border-amber-200 bg-amber-50">
+          <p className="font-medium text-amber-900">
+            Tus calificaciones están restringidas
           </p>
 
-          <h2 className="text-2xl font-bold">
-            {promedio}
-          </h2>
-        </div>
+          <p className="mt-1 text-sm text-amber-800">{bloqueado}</p>
 
-        <div className="rounded-xl bg-white p-4 shadow">
-          <p className="text-sm text-gray-500">
-            Materias inscritas
-          </p>
+          <a href="/alumno/pagos">
+            <Button variante="acento" className="mt-3">
+              Ver mis pagos
+            </Button>
+          </a>
+        </Card>
+      )}
 
-          <h2 className="text-2xl font-bold">
-            {
-              (
-                materias ?? []
-              ).length
-            }
-          </h2>
-        </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <h2 className="mb-3 font-semibold">Clases de hoy</h2>
 
-        <div className="rounded-xl bg-white p-4 shadow">
-          <p className="text-sm text-gray-500">
-            Asistencia
-          </p>
+          {clasesHoy.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              {hoy
+                ? "No tienes clases programadas para hoy."
+                : "Hoy es fin de semana."}
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {clasesHoy.map((c, i) => (
+                <li
+                  key={i}
+                  className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3"
+                >
+                  <div>
+                    <p className="font-medium">{c.materia}</p>
+                    <p className="text-xs text-slate-500">{c.docente}</p>
+                  </div>
 
-          <h2 className="text-2xl font-bold">
-            --%
-          </h2>
-        </div>
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-blue-700">
+                      {c.horaInicio} - {c.horaFin}
+                    </p>
+                    {c.aula && (
+                      <p className="text-xs text-slate-400">Aula {c.aula}</p>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
 
-        <div className="rounded-xl bg-white p-4 shadow">
-          <p className="text-sm text-gray-500">
-            Pagos pendientes
-          </p>
+        <Card>
+          <h2 className="mb-3 font-semibold">Mis materias</h2>
 
-          <h2 className="text-2xl font-bold">
-            {pagosPendientes}
-          </h2>
-        </div>
+          {calificaciones.length === 0 ? (
+            <Vacio titulo="Todavía no hay calificaciones capturadas." />
+          ) : (
+            <ul className="space-y-2">
+              {calificaciones.slice(0, 8).map((c) => (
+                <li
+                  key={c.id}
+                  className="flex items-center justify-between border-b border-slate-100 pb-2 last:border-0"
+                >
+                  <span className="text-sm">{c.materia?.nombre}</span>
 
-      </section>
+                  <span className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">
+                      {c.notaDefinitiva ?? "—"}
+                    </span>
 
-      {/* TABLA */}
-      <section className="rounded-xl bg-white p-6 shadow">
-
-        <h2 className="mb-4 text-lg font-semibold">
-          Mis materias
-        </h2>
-
-        {(materias ?? []).length ===
-        0 ? (
-          <p className="text-gray-500">
-            No hay materias registradas.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-
-            <table className="w-full text-left">
-
-              <thead>
-                <tr className="border-b text-gray-500">
-                  <th className="py-3">
-                    Materia
-                  </th>
-
-                  <th className="py-3">
-                    Promedio
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody>
-
-                {(materias ?? []).map(
-                  (m, i) => (
-                    <tr
-                      key={`${m.materia}-${i}`}
-                      className="border-b"
+                    <Badge
+                      tono={
+                        c.estatus === "APROBADA"
+                          ? "bien"
+                          : c.estatus === "REPROBADA"
+                          ? "grave"
+                          : "neutro"
+                      }
                     >
-                      <td className="py-3">
-                        {m?.materia ??
-                          "Materia"}
-                      </td>
-
-                      <td className="py-3 font-semibold">
-                        {m?.promedio ??
-                          0}
-                      </td>
-                    </tr>
-                  )
-                )}
-
-              </tbody>
-
-            </table>
-
-          </div>
-        )}
-
-      </section>
-
-    </div>
+                      {(c.estatus || "").replace("_", " ")}
+                    </Badge>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
+    </>
   );
 }

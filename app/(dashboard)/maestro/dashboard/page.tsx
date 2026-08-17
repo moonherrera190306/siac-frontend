@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
 
 export default function MaestroDashboardPage() {
   const [dashboard, setDashboard] = useState<any>(null);
@@ -13,15 +14,18 @@ export default function MaestroDashboardPage() {
       try {
         setLoading(true);
 
-        const token = localStorage.getItem("token");
+        // 🔐 El token vive en una cookie httpOnly y no se puede leer desde aquí.
+  // Solo se comprueba que exista una sesión guardada.
+  const sesion =
+    typeof window !== "undefined"
+      ? localStorage.getItem("user")
+      : null;
 
         // 🔥 DASHBOARD
         const dashboardRes = await fetch(
-          "http://localhost:4000/api/docentes/dashboard",
+          `${API_URL}/api/docentes/dashboard`,
           {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+            credentials: "include",
           }
         );
 
@@ -39,11 +43,9 @@ export default function MaestroDashboardPage() {
 
         // 🔥 GRUPOS
         const gruposRes = await fetch(
-          "http://localhost:4000/api/docentes/grupos",
+          `${API_URL}/api/docentes/grupos`,
           {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+            credentials: "include",
           }
         );
 

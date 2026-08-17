@@ -1,182 +1,125 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
+
+const DIAS = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO"];
+
+const ETIQUETA: Record<string, string> = {
+  LUNES: "Lunes",
+  MARTES: "Martes",
+  MIERCOLES: "Miércoles",
+  JUEVES: "Jueves",
+  VIERNES: "Viernes",
+  SABADO: "Sábado",
+};
+
+type Bloque = {
+  dia: string;
+  horaInicio: string;
+  horaFin: string;
+  aula?: string | null;
+  materia: string;
+  grupo: string;
+};
 
 export default function MaestroHorarioPage() {
-  const [horario, setHorario] = useState<any[]>([]);
+  const [bloques, setBloques] = useState<Bloque[]>([]);
+  const [asignaciones, setAsignaciones] = useState(0);
   const [loading, setLoading] = useState(true);
-
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("token")
-      : null;
-
-  const diasSemana = [
-    "Lunes",
-    "Martes",
-    "Miércoles",
-    "Jueves",
-    "Viernes",
-  ];
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!token) {
-      window.location.href = "/login";
-      return;
-    }
-
-    const fetchHorario = async () => {
+    const cargar = async () => {
       try {
-        // 🔥 TRAER GRUPOS
-        const res = await fetch(
-          "http://localhost:4000/api/docentes/grupos",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        // 🔥 Antes este horario se inventaba en el navegador
+        // (`día = index % 5`). Ahora sale de las asignaciones reales.
+        const res = await fetch(`${API_URL}/api/docentes/horario`, {
+          credentials: "include",
+        });
 
-        const response = await res.json();
+        const json = await res.json();
 
-        const grupos =
-          response.data || [];
+        if (!res.ok) {
+          throw new Error(json?.message || "Error al cargar el horario");
+        }
 
-        let clases: any[] = [];
-
-        // 🔥 CREAR HORARIO FICTICIO
-        grupos.forEach(
-          (g: any, index: number) => {
-            clases.push({
-              dia:
-                diasSemana[
-                  index %
-                    diasSemana.length
-                ],
-
-              hora: `${
-                7 + index
-              }:00 - ${
-                8 + index
-              }:00`,
-
-              materia:
-                "Materia asignada",
-
-              grupo: g.nombre,
-
-              aula:
-                "Aula " + (index + 1),
-            });
-          }
-        );
-
-        // 🔥 AGRUPAR POR DÍA
-        const agrupado =
-          diasSemana.map((dia) => ({
-            dia,
-            clases: clases.filter(
-              (c) => c.dia === dia
-            ),
-          }));
-
-        setHorario(agrupado);
-
-      } catch (error) {
-        console.error(error);
-
-        alert("Error cargando horario");
+        setBloques(json?.data ?? []);
+        setAsignaciones(json?.meta?.asignaciones ?? 0);
+      } catch (e: any) {
+        setError(e.message || "Error al cargar el horario");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchHorario();
+    cargar();
   }, []);
 
-  if (loading) {
-    return (
-      <p className="p-6">
-        Cargando...
-      </p>
-    );
-  }
+  if (loading) return <p className="p-6">Cargando...</p>;
 
   return (
     <div className="space-y-6">
-
-      {/* HEADER */}
-      <section className="rounded-2xl bg-white border p-6 shadow-sm">
-
-        <h1 className="text-3xl font-bold">
-          Mi horario
-        </h1>
-
-        <p className="text-gray-500">
-          Clases programadas durante la semana
-        </p>
-
+      <section className="rounded-3xl border bg-white p-6 shadow-sm">
+        <h1 className="text-3xl font-bold">Mi horario</h1>
+        <p className="text-gray-500">Clases del ciclo escolar activo</p>
       </section>
 
-      {/* HORARIO */}
-      <section className="space-y-5">
+      {error && (
+        <p className="rounded-xl bg-red-50 p-4 text-red-600">{error}</p>
+      )}
 
-        {(horario ?? []).map((dia) => (
-          <div
-            key={dia.dia}
-            className="rounded-2xl border bg-white p-6 shadow-sm"
-          >
-            <h2 className="text-xl font-semibold">
-              {dia.dia}
-            </h2>
+      {!error && bloques.length === 0 && (
+        <div className="rounded-3xl border bg-white p-8 text-center">
+          <p className="text-gray-500">
+            {asignaciones === 0
+              ? "No tienes materias asignadas en el ciclo activo."
+              : "Tus materias todavía no tienen horario capturado."}
+          </p>
+          <p className="mt-1 text-sm text-gray-400">
+            Dirección los registra desde Asignaciones.
+          </p>
+        </div>
+      )}
 
-            {dia.clases.length ===
-              0 && (
-              <p className="text-gray-400 mt-2">
-                Sin clases
-              </p>
-            )}
+      {bloques.length > 0 && (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {DIAS.filter((d) => bloques.some((b) => b.dia === d)).map((dia) => (
+            <section
+              key={dia}
+              className="rounded-3xl border bg-white p-5 shadow-sm"
+            >
+              <h2 className="mb-3 text-lg font-semibold text-slate-800">
+                {ETIQUETA[dia]}
+              </h2>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+              <ul className="space-y-3">
+                {bloques
+                  .filter((b) => b.dia === dia)
+                  .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio))
+                  .map((b, i) => (
+                    <li
+                      key={i}
+                      className="rounded-2xl border border-gray-100 bg-gray-50 p-3"
+                    >
+                      <p className="text-sm font-medium text-blue-700">
+                        {b.horaInicio} - {b.horaFin}
+                      </p>
 
-              {(dia.clases ?? []).map(
-                (
-                  clase: any,
-                  index: number
-                ) => (
-                  <div
-                    key={index}
-                    className="rounded-xl border bg-gray-50 p-4"
-                  >
-                    <p className="text-sm text-gray-500">
-                      {clase.hora}
-                    </p>
+                      <p className="font-semibold">{b.materia}</p>
 
-                    <h3 className="font-semibold">
-                      {clase.materia}
-                    </h3>
+                      <p className="text-sm text-gray-500">Grupo {b.grupo}</p>
 
-                    <p className="text-sm text-gray-600">
-                      Grupo:
-                      {" "}
-                      {clase.grupo}
-                    </p>
-
-                    <p className="text-sm text-gray-600">
-                      Aula:
-                      {" "}
-                      {clase.aula}
-                    </p>
-                  </div>
-                )
-              )}
-
-            </div>
-          </div>
-        ))}
-
-      </section>
-
+                      {b.aula && (
+                        <p className="text-xs text-gray-400">Aula {b.aula}</p>
+                      )}
+                    </li>
+                  ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
 
 type Grupo = {
   id?: string;
@@ -42,19 +43,22 @@ export default function SecretariaGruposPage() {
         setLoading(true);
         setError("");
 
-        const token =
-          localStorage.getItem("token");
+        // 🔐 El token vive en una cookie httpOnly y no se puede leer desde aquí.
+  // Solo se comprueba que exista una sesión guardada.
+  const sesion =
+    typeof window !== "undefined"
+      ? localStorage.getItem("user")
+      : null;
 
         const res = await fetch(
-          "http://localhost:4000/api/grupos",
+          `${API_URL}/api/grupos`,
           {
             method: "GET",
 
+            credentials: "include",
             headers: {
               "Content-Type":
-                "application/json",
-
-              Authorization: `Bearer ${token}`,
+                "application/json"
             },
           }
         );
@@ -147,32 +151,32 @@ export default function SecretariaGruposPage() {
                 </h2>
 
                 <p className="mt-2 text-gray-600">
-                  Nivel:{" "}
-                  {g?.nivel ??
-                    "No definido"}
+                  Semestre:{" "}
+                  {g?.semestre?.nombre ?? "No definido"}
                 </p>
 
+                {/* `nivel` y `turno` dejaron de ser texto suelto:
+                    hoy son relaciones del schema. */}
                 <p className="text-gray-600">
-                  Turno:{" "}
-                  {g?.turno ??
-                    "Matutino"}
+                  Turno: {g?.turno?.nombre ?? "Sin turno"}
                 </p>
 
                 <p className="text-gray-600">
                   Alumnos:{" "}
-                  {g?.alumnos?.length ??
-                    0}
+                  {g?._count?.alumnos ?? g?.alumnos?.length ?? 0}
                 </p>
 
                 <p className="text-gray-600">
-                  Materias:{" "}
-                  {g?.materias?.length ??
-                    0}
+                  Carrera:{" "}
+                  {g?.semestre?.carrera?.nombre ?? "—"}
                 </p>
 
-                <button className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-white transition hover:bg-slate-800">
-                  Ver detalle
-                </button>
+                <a
+                  href={`/director/horarios`}
+                  className="mt-4 inline-block rounded-xl border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50"
+                >
+                  Ver horario del grupo
+                </a>
               </div>
             )
           )}

@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
+import { notificar } from "@/lib/notificar";
+import { abrirCredencial } from "@/lib/documentos";
 
 export default function AlumnoPerfilPage() {
 
@@ -71,8 +74,12 @@ export default function AlumnoPerfilPage() {
 
       try {
 
-        const token =
-          localStorage.getItem("token");
+        // 🔐 El token vive en una cookie httpOnly y no se puede leer desde aquí.
+  // Solo se comprueba que exista una sesión guardada.
+  const sesion =
+    typeof window !== "undefined"
+      ? localStorage.getItem("user")
+      : null;
 
         const user = JSON.parse(
           localStorage.getItem("user") || "{}"
@@ -82,12 +89,9 @@ export default function AlumnoPerfilPage() {
           user?.alumnoId || user?.id;
 
         const res = await fetch(
-          `http://localhost:4000/api/alumnos/${alumnoId}`,
+          `${API_URL}/api/alumnos/${alumnoId}`,
           {
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
+            credentials: "include",
           }
         );
 
@@ -179,9 +183,6 @@ export default function AlumnoPerfilPage() {
 
       setSaving(true);
 
-      const token =
-        localStorage.getItem("token");
-
       const user = JSON.parse(
         localStorage.getItem("user") || "{}"
       );
@@ -190,16 +191,14 @@ export default function AlumnoPerfilPage() {
         user?.alumnoId || user?.id;
 
       const res = await fetch(
-        `http://localhost:4000/api/alumnos/perfil/${alumnoId}`,
+        `${API_URL}/api/alumnos/perfil/${alumnoId}`,
         {
           method: "PUT",
 
+          credentials: "include",
           headers: {
             "Content-Type":
-              "application/json",
-
-            Authorization:
-              `Bearer ${token}`,
+              "application/json"
           },
 
           body: JSON.stringify({
@@ -231,15 +230,15 @@ export default function AlumnoPerfilPage() {
 
       setEditando(false);
 
-      alert(
+      notificar(
         "Perfil actualizado correctamente"
-      );
+      , "exito");
 
     } catch (err: any) {
 
       console.error(err);
 
-      alert(err.message);
+      notificar(err.message, "alerta");
 
     } finally {
 
@@ -320,7 +319,25 @@ export default function AlumnoPerfilPage() {
         </div>
 
         {/* BOTONES */}
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
+
+          {/* 🪪 La credencial se arma con los datos del alumno y se
+              abre lista para imprimir o guardar como PDF. */}
+          <button
+            onClick={() => {
+              const ok = abrirCredencial(alumno);
+
+              if (!ok) {
+                notificar(
+                  "El navegador bloqueó la ventana emergente. Permítela para generar la credencial.",
+                  "alerta"
+                );
+              }
+            }}
+            className="rounded-xl border border-slate-300 px-5 py-2 hover:bg-slate-50"
+          >
+            🪪 Credencial escolar
+          </button>
 
           {editando && (
 

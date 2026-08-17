@@ -1,272 +1,156 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
 
-type Pago = {
-  id?: string;
-  concepto?: string;
-  monto?: number | string | null;
-  pagadoEn?: string | null;
-  estatus?: string;
-  alumno?: {
-    user?: {
-      name?: string;
-    };
-  };
-};
-
-function normalizePagos(result: any): Pago[] {
-  if (Array.isArray(result)) return result;
-  if (Array.isArray(result?.pagos)) return result.pagos;
-  if (Array.isArray(result?.data)) return result.data;
-  if (Array.isArray(result?.data?.pagos)) return result.data.pagos;
-
-  return [];
-}
-
-function toNumber(value: unknown) {
-  const n = Number(value ?? 0);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function isToday(dateValue?: string | null) {
-  if (!dateValue) return false;
-
-  const date = new Date(dateValue);
-
-  if (Number.isNaN(date.getTime())) return false;
-
-  return date.toDateString() === new Date().toDateString();
+function hoy() {
+  const d = new Date();
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mes}-${dia}`;
 }
 
 export default function CajaDashboardPage() {
-  const [pagos, setPagos] = useState<Pago[]>([]);
+  const [corte, setCorte] = useState<any>(null);
+  const [adeudos, setAdeudos] = useState<any>({ total: 0, saldoTotal: 0 });
+  const [ultimos, setUltimos] = useState<any[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    async function fetchPagos() {
+    const cargar = async () => {
       try {
-        setLoading(true);
-        setError("");
+        const [rc, ra, rp] = await Promise.all([
+          fetch(`${API_URL}/api/pagos/corte/dia?fecha=${hoy()}`, {
+            credentials: "include",
+          }),
+          fetch(`${API_URL}/api/pagos/adeudos/lista?perPage=1`, {
+            credentials: "include",
+          }),
+          fetch(`${API_URL}/api/pagos?perPage=8`, { credentials: "include" }),
+        ]);
 
-        const token = localStorage.getItem("token");
+        const [jc, ja, jp] = await Promise.all([rc.json(), ra.json(), rp.json()]);
 
-        const res = await fetch("http://localhost:4000/api/pagos", {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        const response = await res.json();
-
-        if (!res.ok) {
-          throw new Error(
-            response?.message || "Error interno del servidor"
-          );
-        }
-
-        const data = response?.data || [];
-
-        setPagos(normalizePagos(data));
-      } catch (err: any) {
-        console.error("Error dashboard caja:", err);
-
-        setError(err?.message || "Error al cargar dashboard de caja.");
-
-        setPagos([]);
+        if (rc.ok) setCorte(jc?.data ?? null);
+        if (ra.ok) setAdeudos(ja?.meta ?? { total: 0, saldoTotal: 0 });
+        if (rp.ok) setUltimos(jp?.data ?? []);
+      } catch (e: any) {
+        setError(e.message || "Error al cargar el panel");
       } finally {
         setLoading(false);
       }
-    }
+    };
 
-    fetchPagos();
+    cargar();
   }, []);
 
-  const metricas = useMemo(() => {
-    const pagosHoy = (pagos ?? []).filter((p) =>
-      isToday(p?.pagadoEn)
-    );
-
-    const cobrosHoy = pagosHoy.reduce((acc, p) => {
-      return acc + toNumber(p?.monto);
-    }, 0);
-
-    const movimientosHoy = pagosHoy.length;
-
-    const pagosPendientes = (pagos ?? []).filter(
-      (p) => !p?.pagadoEn && p?.estatus !== "PAGADO"
-    ).length;
-
-    const recibosEmitidos = (pagos ?? []).length;
-
-    return {
-      cobrosHoy,
-      movimientosHoy,
-      pagosPendientes,
-      recibosEmitidos,
-    };
-  }, [pagos]);
-
-  const recientes = useMemo(() => {
-    return (pagos ?? []).slice(0, 5);
-  }, [pagos]);
-
- const accesos = [
-  {
-    title: "Registrar cobro",
-    href: "/caja/cobros",
-  },
-
-  {
-    title: "Consultar pagos pendientes",
-    href: "/caja/pagos-pendientes",
-  },
-
-  {
-    title: "Generar recibo",
-    href: "/caja/recibos",
-  },
-
-  {
-    title: "Ver historial",
-    href: "/caja/historial",
-  },
-];
-
-  if (loading) {
-    return <p className="p-6">Cargando dashboard de caja...</p>;
-  }
-
-  if (error) {
-    return (
-      <div className="p-6">
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
-          {error}
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <p className="p-6">Cargando...</p>;
 
   return (
-    <div className="space-y-6 p-6">
-      <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <h1 className="text-3xl font-bold">
-          Dashboard de Caja
-        </h1>
-
-        <p className="text-gray-500">
-          Control general de cobros y movimientos
-        </p>
+    <div className="space-y-6">
+      <section className="rounded-3xl border bg-white p-6 shadow-sm">
+        <h1 className="text-3xl font-bold">Caja</h1>
+        <p className="text-gray-500">Movimiento del día</p>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-4">
-        <div className="rounded-xl bg-white p-5 shadow">
-          <p className="text-sm text-gray-500">
-            Cobros del día
-          </p>
+      {error && (
+        <p className="rounded-xl bg-red-50 p-4 text-red-600">{error}</p>
+      )}
 
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="rounded-3xl border bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">Cobrado hoy</p>
           <h2 className="text-2xl font-bold">
-            ${metricas.cobrosHoy.toFixed(2)}
+            ${Number(corte?.total ?? 0).toFixed(2)}
           </h2>
         </div>
 
-        <div className="rounded-xl bg-white p-5 shadow">
-          <p className="text-sm text-gray-500">
-            Pagos pendientes
-          </p>
-
-          <h2 className="text-2xl font-bold">
-            {metricas.pagosPendientes}
-          </h2>
+        <div className="rounded-3xl border bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">Recibos hoy</p>
+          <h2 className="text-2xl font-bold">{corte?.recibos ?? 0}</h2>
         </div>
 
-        <div className="rounded-xl bg-white p-5 shadow">
-          <p className="text-sm text-gray-500">
-            Recibos emitidos
-          </p>
-
+        <div className="rounded-3xl border bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">Adeudos pendientes</p>
           <h2 className="text-2xl font-bold">
-            {metricas.recibosEmitidos}
+            ${Number(adeudos?.saldoTotal ?? 0).toFixed(2)}
           </h2>
+          <p className="text-xs text-gray-400">{adeudos?.total ?? 0} registro(s)</p>
         </div>
+      </div>
 
-        <div className="rounded-xl bg-white p-5 shadow">
-          <p className="text-sm text-gray-500">
-            Movimientos hoy
+      <div className="grid gap-3 md:grid-cols-3">
+        <a
+          href="/caja/cobros"
+          className="rounded-2xl bg-blue-600 p-5 text-white transition hover:bg-blue-700"
+        >
+          <p className="text-lg font-semibold">Cobrar</p>
+          <p className="text-sm opacity-90">Generar un recibo nuevo</p>
+        </a>
+
+        <a
+          href="/caja/pagos-pendientes"
+          className="rounded-2xl border bg-white p-5 transition hover:border-blue-400"
+        >
+          <p className="text-lg font-semibold">Adeudos</p>
+          <p className="text-sm text-gray-500">Registrar y consultar</p>
+        </a>
+
+        <a
+          href="/caja/reportes"
+          className="rounded-2xl border bg-white p-5 transition hover:border-blue-400"
+        >
+          <p className="text-lg font-semibold">Corte del día</p>
+          <p className="text-sm text-gray-500">Desglose por concepto</p>
+        </a>
+      </div>
+
+      <section className="overflow-x-auto rounded-3xl border bg-white shadow-sm">
+        <h2 className="border-b px-5 py-4 text-lg font-semibold">
+          Últimos recibos
+        </h2>
+
+        {ultimos.length === 0 ? (
+          <p className="p-6 text-center text-gray-500">
+            Todavía no hay recibos emitidos.
           </p>
+        ) : (
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50 text-gray-600">
+              <tr>
+                <th className="px-4 py-3">Folio</th>
+                <th className="px-4 py-3">Alumno</th>
+                <th className="px-4 py-3">Total</th>
+                <th className="px-4 py-3">Estado</th>
+              </tr>
+            </thead>
 
-          <h2 className="text-2xl font-bold">
-            {metricas.movimientosHoy}
-          </h2>
-        </div>
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-3">
-        <div className="rounded-2xl bg-white p-6 shadow xl:col-span-2">
-          <h2 className="text-xl font-semibold">
-            Movimientos recientes
-          </h2>
-
-          {(recientes ?? []).length === 0 ? (
-            <p className="mt-4 text-gray-500">
-              No hay movimientos recientes.
-            </p>
-          ) : (
-            <div className="mt-4 space-y-3">
-              {(recientes ?? []).map((p, i) => (
-                <div
-                  key={p?.id ?? i}
-                  className="rounded-xl border bg-gray-50 p-4"
-                >
-                  <div className="flex justify-between gap-4">
-                    <div>
-                      <p className="font-semibold">
-                        {p?.alumno?.user?.name ??
-                          "Alumno no disponible"}
-                      </p>
-
-                      <p className="text-sm text-gray-500">
-                        {p?.concepto ?? "Sin concepto"}
-                      </p>
-                    </div>
-
-                    <div className="text-right">
-                      <p className="font-bold">
-                        $
-                        {toNumber(p?.monto).toFixed(2)}
-                      </p>
-
-                      <p className="text-sm text-gray-500">
-                        {p?.estatus ?? "SIN ESTATUS"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+            <tbody>
+              {ultimos.map((p) => (
+                <tr key={p.id} className="border-t">
+                  <td className="px-4 py-3 font-semibold">{p.folio}</td>
+                  <td className="px-4 py-3">{p.alumno?.user?.name || "N/A"}</td>
+                  <td className="px-4 py-3">
+                    ${Number(p.total ?? 0).toFixed(2)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={
+                        p.estado === "CANCELADO"
+                          ? "rounded-full bg-red-100 px-3 py-1 text-xs text-red-700"
+                          : "rounded-full bg-green-100 px-3 py-1 text-xs text-green-700"
+                      }
+                    >
+                      {p.estado === "CANCELADO" ? "Cancelado" : "Pagado"}
+                    </span>
+                  </td>
+                </tr>
               ))}
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-2xl bg-white p-6 shadow">
-          <h2 className="text-xl font-semibold">
-            Accesos rápidos
-          </h2>
-
-          <div className="mt-4 space-y-3">
-  {(accesos ?? []).map((item) => (
-    <a
-      key={item.href}
-      href={item.href}
-      className="block w-full rounded-xl bg-blue-600 px-4 py-3 text-left text-white transition hover:bg-blue-700"
-    >
-      {item.title}
-    </a>
-  ))}
-</div>
-        </div>
+            </tbody>
+          </table>
+        )}
       </section>
     </div>
   );

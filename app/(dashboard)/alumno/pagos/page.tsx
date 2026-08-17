@@ -1,310 +1,249 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
+import { abrirRecibo } from "@/lib/documentos";
 
 export default function AlumnoPagosPage() {
   const [pagos, setPagos] = useState<any[]>([]);
+  const [resumen, setResumen] = useState<any>(null);
+  const [recibo, setRecibo] = useState<any>(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const fetchPagos = async () => {
+    const cargar = async () => {
       try {
-        setLoading(true);
+        const guardado = localStorage.getItem("user");
 
-        const token =
-          localStorage.getItem("token");
-
-        const user = JSON.parse(
-          localStorage.getItem("user") || "{}"
-        );
-
-        const alumnoId =
-          user?.alumnoId ||
-          user?.id;
-
-        if (!token) {
-          throw new Error(
-            "Token inválido"
-          );
-        }
-
-        if (!alumnoId) {
-          throw new Error(
-            "Alumno no encontrado"
-          );
-        }
-
-        const res = await fetch(
-          `http://localhost:4000/api/pagos/${alumnoId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        const response =
-          await res.json();
-
-        console.log(
-          "PAGOS:",
-          response
-        );
-
-        if (!res.ok) {
-          throw new Error(
-            response?.message ||
-              "Error cargando pagos"
-          );
-        }
-
-        const data =
-          response?.data || [];
-
-        if (!Array.isArray(data)) {
-          console.error(
-            "Backend no regresó array:",
-            data
-          );
-
-          setPagos([]);
+        if (!guardado) {
+          window.location.href = "/login";
           return;
         }
 
-        setPagos(data);
+        const user = JSON.parse(guardado);
+        const alumnoId = user?.alumnoId || user?.id;
 
-      } catch (err: any) {
-        console.error(err);
+        const [rp, rr] = await Promise.all([
+          fetch(`${API_URL}/api/pagos/${alumnoId}`, { credentials: "include" }),
+          fetch(`${API_URL}/api/pagos/resumen/${alumnoId}`, {
+            credentials: "include",
+          }),
+        ]);
 
-        setError(
-          err?.message ||
-            "Error cargando pagos"
-        );
+        const [jp, jr] = await Promise.all([rp.json(), rr.json()]);
 
-        setPagos([]);
+        if (!rp.ok) throw new Error(jp?.message || "Error al cargar pagos");
+
+        setPagos(jp?.data ?? []);
+        setResumen(jr?.data ?? null);
+      } catch (e: any) {
+        setError(e.message || "Error al cargar pagos");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchPagos();
+    cargar();
   }, []);
 
-  if (loading) {
-    return (
-      <p className="p-6">
-        Cargando pagos...
-      </p>
-    );
-  }
+  if (loading) return <p className="p-6">Cargando...</p>;
 
-  if (error) {
-    return (
-      <div className="p-6">
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
-          {error}
-        </div>
-      </div>
-    );
-  }
-
-  // ==================================
-  // MÉTRICAS
-  // ==================================
-
-  const pagosRealizados =
-    (pagos ?? []).filter(
-      (p) => p?.pagadoEn
-    ).length;
-
-  const saldoPendiente =
-    (pagos ?? [])
-      .filter(
-        (p) => !p?.pagadoEn
-      )
-      .reduce(
-        (acc, p) =>
-          acc +
-          Number(
-            p?.monto || 0
-          ),
-        0
-      );
-
-  const proximoPago =
-    (pagos ?? []).find(
-      (p) => !p?.pagadoEn
-    );
+  const adeudo = Number(resumen?.adeudo ?? 0);
 
   return (
-    <div className="space-y-6 p-6">
-
-      {/* HEADER */}
-      <section className="bg-white p-6 rounded-2xl shadow">
-        <h1 className="text-3xl font-bold">
-          Pagos
-        </h1>
-
-        <p className="text-gray-500">
-          Consulta tu historial financiero
-        </p>
+    <div className="space-y-6">
+      <section className="rounded-3xl border bg-white p-6 shadow-sm">
+        <h1 className="text-3xl font-bold">Mis pagos</h1>
+        <p className="text-gray-500">{pagos.length} recibo(s) a tu nombre</p>
       </section>
 
-      {/* RESUMEN */}
-      <section className="grid md:grid-cols-3 gap-4">
+      {error && (
+        <p className="rounded-xl bg-red-50 p-4 text-red-600">{error}</p>
+      )}
 
-        <div className="bg-white p-4 rounded-xl shadow">
-          <p className="text-sm text-gray-500">
-            Saldo pendiente
-          </p>
-
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-3xl border bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">Total pagado</p>
           <h2 className="text-2xl font-bold">
-            $
-            {saldoPendiente.toFixed(
-              2
-            )}
+            ${Number(resumen?.totalPagado ?? 0).toFixed(2)}
           </h2>
         </div>
 
-        <div className="bg-white p-4 rounded-xl shadow">
-          <p className="text-sm text-gray-500">
-            Pagos realizados
-          </p>
+        <div
+          className={`rounded-3xl border p-5 shadow-sm ${
+            adeudo > 0 ? "border-red-300 bg-red-50" : "bg-white"
+          }`}
+        >
+          <p className="text-sm text-gray-500">Adeudo</p>
 
-          <h2 className="text-2xl font-bold">
-            {pagosRealizados}
+          <h2
+            className={`text-2xl font-bold ${
+              adeudo > 0 ? "text-red-700" : ""
+            }`}
+          >
+            ${adeudo.toFixed(2)}
           </h2>
+
+          {adeudo > 0 && (
+            <p className="mt-1 text-xs text-red-700">
+              Con adeudo pendiente no puedes consultar tus calificaciones.
+            </p>
+          )}
         </div>
+      </div>
 
-        <div className="bg-white p-4 rounded-xl shadow">
-          <p className="text-sm text-gray-500">
-            Próximo pago
-          </p>
+      {(resumen?.adeudos ?? []).length > 0 && (
+        <section className="rounded-3xl border bg-white p-5 shadow-sm">
+          <h2 className="mb-3 font-semibold">Detalle del adeudo</h2>
 
-          <h2 className="text-xl font-bold">
-            {proximoPago?.concepto ||
-              "Sin pendientes"}
-          </h2>
-        </div>
-
-      </section>
-
-      {/* HISTORIAL */}
-      <section className="bg-white p-6 rounded-2xl shadow">
-
-        <h2 className="font-semibold mb-4">
-          Historial de pagos
-        </h2>
-
-        {(pagos ?? []).length ===
-        0 ? (
-          <p className="text-gray-500">
-            No hay pagos registrados
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-
-            <table className="w-full text-left">
-
-              <thead>
-                <tr className="text-gray-500 border-b">
-                  <th className="py-3">
-                    Concepto
-                  </th>
-
-                  <th className="py-3">
-                    Monto
-                  </th>
-
-                  <th className="py-3">
-                    Estado
-                  </th>
-
-                  <th className="py-3">
-                    Fecha
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody>
-
-                {(pagos ?? []).map(
-                  (p, i) => (
-                    <tr
-                      key={
-                        p?.id || i
-                      }
-                      className="border-b"
-                    >
-                      <td className="py-3">
-                        {p?.concepto ||
-                          "Pago"}
-                      </td>
-
-                      <td className="py-3">
-                        $
-                        {Number(
-                          p?.monto || 0
-                        ).toFixed(2)}
-                      </td>
-
-                      <td className="py-3">
-
-                        {p?.pagadoEn ? (
-                          <span className="text-green-600 font-medium">
-                            Pagado
-                          </span>
-                        ) : (
-                          <span className="text-yellow-600 font-medium">
-                            Pendiente
-                          </span>
-                        )}
-
-                      </td>
-
-                      <td className="py-3">
-                        {p?.pagadoEn
-                          ? new Date(
-                              p.pagadoEn
-                            ).toLocaleDateString()
-                          : "-"}
-                      </td>
-                    </tr>
-                  )
-                )}
-
-              </tbody>
-
-            </table>
-
-          </div>
-        )}
-
-      </section>
-
-      {/* PRÓXIMO PAGO */}
-      {proximoPago && (
-        <section className="bg-yellow-50 border border-yellow-200 p-4 rounded-xl">
-
-          <p className="font-semibold text-yellow-800">
-            Próximo pago pendiente
-          </p>
-
-          <p className="mt-2">
-            {proximoPago?.concepto}
-          </p>
-
-          <p className="font-bold">
-            $
-            {Number(
-              proximoPago?.monto || 0
-            ).toFixed(2)}
-          </p>
-
+          <ul className="space-y-2 text-sm">
+            {resumen.adeudos.map((a: any) => (
+              <li
+                key={a.id}
+                className="flex justify-between border-b pb-2 last:border-0"
+              >
+                <span>{a.descripcion || "Adeudo"}</span>
+                <span className="font-medium">
+                  ${Number(a.saldo).toFixed(2)}
+                </span>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
+      {pagos.length === 0 ? (
+        <div className="rounded-3xl border bg-white p-8 text-center text-gray-500">
+          Todavía no tienes pagos registrados.
+        </div>
+      ) : (
+        <section className="overflow-x-auto rounded-3xl border bg-white shadow-sm">
+          <h2 className="border-b px-5 py-4 text-lg font-semibold">Recibos</h2>
+
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50 text-gray-600">
+              <tr>
+                <th className="px-4 py-3">Folio</th>
+                <th className="px-4 py-3">Fecha</th>
+                <th className="px-4 py-3">Conceptos</th>
+                <th className="px-4 py-3">Total</th>
+                <th className="px-4 py-3">Estado</th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {pagos.map((p) => (
+                <tr
+                  key={p.id}
+                  className={`border-t ${
+                    p.estado === "CANCELADO" ? "opacity-60" : ""
+                  }`}
+                >
+                  <td className="px-4 py-3 font-semibold">{p.folio}</td>
+
+                  <td className="px-4 py-3">
+                    {p.pagadoEn
+                      ? new Date(p.pagadoEn).toLocaleDateString("es-MX")
+                      : "—"}
+                  </td>
+
+                  <td className="px-4 py-3">
+                    {(p.detalles ?? [])
+                      .map((d: any) => d.concepto?.nombre)
+                      .filter(Boolean)
+                      .join(", ") || "—"}
+                  </td>
+
+                  <td className="px-4 py-3">
+                    ${Number(p.total ?? 0).toFixed(2)}
+                  </td>
+
+                  <td className="px-4 py-3">
+                    <span
+                      className={
+                        p.estado === "CANCELADO"
+                          ? "rounded-full bg-red-100 px-3 py-1 text-xs text-red-700"
+                          : "rounded-full bg-green-100 px-3 py-1 text-xs text-green-700"
+                      }
+                    >
+                      {p.estado === "CANCELADO" ? "Cancelado" : "Pagado"}
+                    </span>
+                  </td>
+
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => setRecibo(p)}
+                        className="rounded-lg border px-3 py-1 text-xs hover:bg-gray-50"
+                      >
+                        Ver
+                      </button>
+
+                      <button
+                        onClick={() => abrirRecibo(p)}
+                        className="rounded-lg border px-3 py-1 text-xs hover:bg-blue-50"
+                      >
+                        Imprimir
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {recibo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h2 className="text-xl font-bold">Recibo {recibo.folio}</h2>
+
+            <p className="mt-1 text-sm text-gray-500">
+              {recibo.pagadoEn
+                ? new Date(recibo.pagadoEn).toLocaleDateString("es-MX")
+                : ""}{" "}
+              · {recibo.metodo}
+            </p>
+
+            <ul className="mt-4 space-y-2 text-sm">
+              {(recibo.detalles ?? []).map((d: any) => (
+                <li key={d.id} className="flex justify-between border-b pb-2">
+                  <span>
+                    {d.concepto?.nombre}
+                    {d.cantidad > 1 && ` x${d.cantidad}`}
+                  </span>
+                  <span>${Number(d.monto * d.cantidad).toFixed(2)}</span>
+                </li>
+              ))}
+            </ul>
+
+            <div className="mt-4 flex justify-between font-semibold">
+              <span>Total</span>
+              <span>${Number(recibo.total ?? 0).toFixed(2)}</span>
+            </div>
+
+            <div className="mt-6 flex gap-2">
+              <button
+                onClick={() => abrirRecibo(recibo)}
+                className="flex-1 rounded-xl bg-blue-700 py-2 text-white hover:bg-blue-800"
+              >
+                Descargar recibo
+              </button>
+
+              <button
+                onClick={() => setRecibo(null)}
+                className="rounded-xl border border-slate-300 px-4 py-2"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

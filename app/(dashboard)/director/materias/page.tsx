@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
+import { notificar } from "@/lib/notificar";
 
 export default function DirectorMateriasPage() {
 
@@ -26,16 +28,17 @@ export default function DirectorMateriasPage() {
 
     try {
 
-      const token =
-        localStorage.getItem("token");
+      // 🔐 El token vive en una cookie httpOnly y no se puede leer desde aquí.
+  // Solo se comprueba que exista una sesión guardada.
+  const sesion =
+    typeof window !== "undefined"
+      ? localStorage.getItem("user")
+      : null;
 
       const res = await fetch(
-        "http://localhost:4000/api/materias",
+        `${API_URL}/api/materias`,
         {
-          headers: {
-            Authorization:
-              `Bearer ${token}`
-          }
+          credentials: "include",
         }
       );
 
@@ -56,9 +59,9 @@ export default function DirectorMateriasPage() {
 
       console.error(error);
 
-      alert(
+      notificar(
         "Error obteniendo materias"
-      );
+      , "error");
 
     } finally {
 
@@ -74,9 +77,9 @@ export default function DirectorMateriasPage() {
 
     if (!nombre) {
 
-      alert(
+      notificar(
         "Nombre requerido"
-      );
+      , "alerta");
 
       return;
     }
@@ -85,23 +88,17 @@ export default function DirectorMateriasPage() {
 
       setCreating(true);
 
-      const token =
-        localStorage.getItem("token");
-
       const res = await fetch(
-        "http://localhost:4000/api/materias",
+        `${API_URL}/api/materias`,
         {
 
           method: "POST",
 
+          credentials: "include",
           headers: {
 
             "Content-Type":
-              "application/json",
-
-            Authorization:
-              `Bearer ${token}`
-
+              "application/json"
           },
 
           body: JSON.stringify({
@@ -126,9 +123,9 @@ export default function DirectorMateriasPage() {
 
       }
 
-      alert(
+      notificar(
         "✅ Materia creada"
-      );
+      , "exito");
 
       // 🔥 LIMPIAR
       setNombre("");
@@ -140,9 +137,9 @@ export default function DirectorMateriasPage() {
 
       console.error(error);
 
-      alert(
+      notificar(
         error.message
-      );
+      , "error");
 
     } finally {
 

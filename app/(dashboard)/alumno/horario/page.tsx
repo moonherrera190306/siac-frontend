@@ -1,418 +1,146 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
 
-export default function AlumnoAsistenciaPage() {
+const DIAS = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO"];
 
-  const [asistencias, setAsistencias] =
-    useState<any[]>([]);
+const ETIQUETA: Record<string, string> = {
+  LUNES: "Lunes",
+  MARTES: "Martes",
+  MIERCOLES: "Miércoles",
+  JUEVES: "Jueves",
+  VIERNES: "Viernes",
+  SABADO: "Sábado",
+};
 
-  const [loading, setLoading] =
-    useState(true);
+type Bloque = {
+  dia: string;
+  horaInicio: string;
+  horaFin: string;
+  aula?: string | null;
+  materia: string;
+  docente: string;
+};
 
-  const [error, setError] =
-    useState("");
-
-  // ========================================
-  // FETCH
-  // ========================================
+export default function AlumnoHorarioPage() {
+  const [bloques, setBloques] = useState<Bloque[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-
-    const fetchAsistencias = async () => {
-
+    const cargar = async () => {
       try {
+        const guardado = localStorage.getItem("user");
 
-        const token =
-          localStorage.getItem("token");
-
-        const user = JSON.parse(
-          localStorage.getItem("user") || "{}"
-        );
-
-        const alumnoId =
-          user?.alumnoId || user?.id;
-
-        const res = await fetch(
-          `http://localhost:4000/api/asistencias/alumno/${alumnoId}`,
-          {
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-          }
-        );
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(
-            data.message ||
-            "Error obteniendo asistencias"
-          );
+        if (!guardado) {
+          window.location.href = "/login";
+          return;
         }
 
-        setAsistencias(
-          data.data || []
+        const user = JSON.parse(guardado);
+        const alumnoId = user?.alumnoId || user?.id;
+
+        const res = await fetch(
+          `${API_URL}/api/alumnos/horario/${alumnoId}`,
+          { credentials: "include" }
         );
 
-      } catch (err: any) {
+        const json = await res.json();
 
-        console.error(err);
+        if (!res.ok) {
+          throw new Error(json?.message || "Error al cargar el horario");
+        }
 
-        setError(err.message);
+        // Cada asignación trae sus bloques reales de horario.
+        const filas: Bloque[] = [];
 
+        for (const a of json?.data ?? []) {
+          for (const h of a.horarios ?? []) {
+            filas.push({
+              dia: h.dia,
+              horaInicio: h.horaInicio,
+              horaFin: h.horaFin,
+              aula: h.aula || a.aula,
+              materia: a.materia?.nombre ?? "Sin materia",
+              docente: a.docente?.nombre || a.docente?.user?.name || "Sin docente",
+            });
+          }
+        }
+
+        setBloques(filas);
+      } catch (e: any) {
+        setError(e.message || "Error al cargar el horario");
       } finally {
-
         setLoading(false);
-
       }
     };
 
-    fetchAsistencias();
-
+    cargar();
   }, []);
 
-  // ========================================
-  // ESTADÍSTICAS
-  // ========================================
-
-  const totalAsistencias =
-    asistencias.length;
-
-  const presentes =
-    asistencias.filter(
-      (a) => a.presente
-    ).length;
-
-  const faltas =
-    asistencias.filter(
-      (a) => !a.presente
-    ).length;
-
-  const porcentaje =
-    totalAsistencias > 0
-      ? Math.round(
-          (presentes /
-            totalAsistencias) * 100
-        )
-      : 0;
-
-  // ========================================
-  // AGRUPAR POR MES
-  // ========================================
-
-  const asistenciasPorMes =
-    useMemo(() => {
-
-      const meses: any = {};
-
-      asistencias.forEach((a) => {
-
-        const fecha =
-          new Date(a.fecha);
-
-        const mes =
-          fecha.toLocaleString(
-            "es-MX",
-            {
-              month: "long",
-              year: "numeric",
-            }
-          );
-
-        if (!meses[mes]) {
-          meses[mes] = [];
-        }
-
-        meses[mes].push(a);
-
-      });
-
-      return meses;
-
-    }, [asistencias]);
-
-  // ========================================
-  // LOADING
-  // ========================================
-
-  if (loading) {
-    return (
-      <div className="p-6">
-        Cargando asistencias...
-      </div>
-    );
-  }
-
-  // ========================================
-  // ERROR
-  // ========================================
-
-  if (error) {
-    return (
-      <div className="bg-red-100 text-red-600 p-4 rounded-2xl">
-        {error}
-      </div>
-    );
-  }
-
-  // ========================================
-  // UI
-  // ========================================
+  if (loading) return <p className="p-6">Cargando...</p>;
 
   return (
-    <div className="space-y-6 p-6">
-
-      {/* HEADER */}
-      <section className="bg-white rounded-3xl shadow p-6">
-
-        <h1 className="text-4xl font-bold">
-          Mis Asistencias 📚
-        </h1>
-
-        <p className="text-gray-500 mt-2">
-          Consulta tus asistencias,
-          faltas y porcentaje académico
-        </p>
-
+    <div className="space-y-6">
+      <section className="rounded-2xl border bg-white p-6 shadow-sm">
+        <h1 className="text-3xl font-bold">Mi horario</h1>
+        <p className="text-gray-500">Ciclo escolar activo</p>
       </section>
 
-      {/* STATS */}
-      <div className="grid md:grid-cols-4 gap-6">
+      {error && (
+        <p className="rounded-xl bg-red-50 p-4 text-red-600">{error}</p>
+      )}
 
-        {/* TOTAL */}
-        <div className="bg-white rounded-3xl shadow p-6">
-
+      {!error && bloques.length === 0 && (
+        <div className="rounded-2xl border bg-white p-8 text-center">
           <p className="text-gray-500">
-            Total clases
+            Todavía no hay horarios capturados para tus materias.
           </p>
-
-          <h2 className="text-4xl font-bold mt-3">
-            {totalAsistencias}
-          </h2>
-
-        </div>
-
-        {/* PRESENTES */}
-        <div className="bg-white rounded-3xl shadow p-6">
-
-          <p className="text-gray-500">
-            Asistencias
+          <p className="mt-1 text-sm text-gray-400">
+            Cuando dirección los registre aparecerán aquí.
           </p>
-
-          <h2 className="text-4xl font-bold text-green-600 mt-3">
-            {presentes}
-          </h2>
-
         </div>
+      )}
 
-        {/* FALTAS */}
-        <div className="bg-white rounded-3xl shadow p-6">
+      {bloques.length > 0 && (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {DIAS.filter((d) => bloques.some((b) => b.dia === d)).map((dia) => (
+            <section
+              key={dia}
+              className="rounded-2xl border bg-white p-5 shadow-sm"
+            >
+              <h2 className="mb-3 text-lg font-semibold text-slate-800">
+                {ETIQUETA[dia]}
+              </h2>
 
-          <p className="text-gray-500">
-            Faltas
-          </p>
+              <ul className="space-y-3">
+                {bloques
+                  .filter((b) => b.dia === dia)
+                  .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio))
+                  .map((b, i) => (
+                    <li
+                      key={i}
+                      className="rounded-xl border border-gray-100 bg-gray-50 p-3"
+                    >
+                      <p className="text-sm font-medium text-blue-700">
+                        {b.horaInicio} - {b.horaFin}
+                      </p>
 
-          <h2 className="text-4xl font-bold text-red-500 mt-3">
-            {faltas}
-          </h2>
+                      <p className="font-semibold">{b.materia}</p>
 
+                      <p className="text-sm text-gray-500">{b.docente}</p>
+
+                      {b.aula && (
+                        <p className="text-xs text-gray-400">Aula {b.aula}</p>
+                      )}
+                    </li>
+                  ))}
+              </ul>
+            </section>
+          ))}
         </div>
-
-        {/* PORCENTAJE */}
-        <div className="bg-white rounded-3xl shadow p-6">
-
-          <p className="text-gray-500">
-            Asistencia global
-          </p>
-
-          <h2 className="text-4xl font-bold text-blue-600 mt-3">
-            {porcentaje}%
-          </h2>
-
-        </div>
-
-      </div>
-
-      {/* BARRA */}
-      <section className="bg-white rounded-3xl shadow p-6">
-
-        <div className="flex justify-between mb-3">
-
-          <span className="font-semibold">
-            Progreso de asistencia
-          </span>
-
-          <span className="font-bold">
-            {porcentaje}%
-          </span>
-
-        </div>
-
-        <div className="h-4 w-full rounded-full bg-slate-200 overflow-hidden">
-
-          <div
-            style={{
-              width: `${porcentaje}%`
-            }}
-            className={`h-full rounded-full ${
-              porcentaje >= 80
-                ? "bg-green-500"
-                : porcentaje >= 60
-                  ? "bg-yellow-500"
-                  : "bg-red-500"
-            }`}
-          />
-
-        </div>
-
-      </section>
-
-      {/* HISTORIAL */}
-      <section className="bg-white rounded-3xl shadow p-6">
-
-        <h2 className="text-2xl font-bold mb-6">
-
-          Historial mensual
-
-        </h2>
-
-        {Object.keys(asistenciasPorMes)
-          .length === 0 ? (
-
-          <div className="text-center py-10 text-gray-500">
-
-            No hay asistencias registradas
-
-          </div>
-
-        ) : (
-
-          <div className="space-y-8">
-
-            {Object.entries(
-              asistenciasPorMes
-            ).map(
-              ([mes, registros]: any) => (
-
-              <div key={mes}>
-
-                {/* MES */}
-                <div className="flex items-center justify-between mb-4">
-
-                  <h3 className="text-xl font-bold capitalize">
-
-                    {mes}
-
-                  </h3>
-
-                  <div className="text-sm text-gray-500">
-
-                    {
-                      registros.length
-                    } clases
-
-                  </div>
-
-                </div>
-
-                {/* TABLA */}
-                <div className="overflow-x-auto border rounded-2xl">
-
-                  <table className="w-full">
-
-                    <thead className="bg-slate-100">
-
-                      <tr className="text-left">
-
-                        <th className="p-4">
-                          Fecha
-                        </th>
-
-                        <th className="p-4">
-                          Materia
-                        </th>
-
-                        <th className="p-4">
-                          Estado
-                        </th>
-
-                      </tr>
-
-                    </thead>
-
-                    <tbody>
-
-                      {registros.map(
-                        (a: any) => (
-
-                        <tr
-                          key={a.id}
-                          className="border-t"
-                        >
-
-                          {/* FECHA */}
-                          <td className="p-4">
-
-                            {new Date(
-                              a.fecha
-                            ).toLocaleDateString(
-                              "es-MX"
-                            )}
-
-                          </td>
-
-                          {/* MATERIA */}
-                          <td className="p-4 font-medium">
-
-                            {
-                              a?.materia
-                                ?.nombre ||
-                              "Materia"
-                            }
-
-                          </td>
-
-                          {/* ESTADO */}
-                          <td className="p-4">
-
-                            <span
-                              className={`rounded-full px-4 py-1 text-sm font-semibold ${
-                                a.presente
-                                  ? "bg-green-100 text-green-700"
-                                  : "bg-red-100 text-red-600"
-                              }`}
-                            >
-
-                              {a.presente
-                                ? "Presente"
-                                : "Falta"}
-
-                            </span>
-
-                          </td>
-
-                        </tr>
-
-                      ))}
-
-                    </tbody>
-
-                  </table>
-
-                </div>
-
-              </div>
-
-            ))}
-
-          </div>
-
-        )}
-
-      </section>
-
+      )}
     </div>
   );
 }

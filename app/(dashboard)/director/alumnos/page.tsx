@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
 
 export default function DirectorAlumnosPage() {
   const [alumnos, setAlumnos] = useState<any[]>([]);
@@ -9,14 +10,17 @@ export default function DirectorAlumnosPage() {
 
   useEffect(() => {
     const fetchAlumnos = async () => {
-      const token = localStorage.getItem("token");
+      // 🔐 El token vive en una cookie httpOnly y no se puede leer desde aquí.
+  // Solo se comprueba que exista una sesión guardada.
+  const sesion =
+    typeof window !== "undefined"
+      ? localStorage.getItem("user")
+      : null;
 
       const res = await fetch(
-        "http://localhost:4000/api/director/alumnos",
+        `${API_URL}/api/director/alumnos`,
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          credentials: "include",
         }
       );
 

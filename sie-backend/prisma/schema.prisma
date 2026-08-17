@@ -1,0 +1,291 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+//////////////////////////
+// SEGURIDAD
+//////////////////////////
+
+model Role {
+  id       Int          @id @default(autoincrement())
+  nombre   String
+  usuarios UsuarioRol[]
+  permisos RolPermiso[]
+}
+
+model Permiso {
+  id     Int          @id @default(autoincrement())
+  nombre String
+  modulo String
+  accion String
+  roles  RolPermiso[]
+}
+
+model RolPermiso {
+  roleId    Int
+  permisoId Int
+
+  role    Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permiso Permiso @relation(fields: [permisoId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permisoId])
+}
+
+model Usuario {
+  id            Int      @id @default(autoincrement())
+  nombre        String
+  apellidos     String
+  email         String   @unique
+  passwordHash  String
+  activo        Boolean  @default(true)
+  fechaCreacion DateTime @default(now())
+
+  roles   UsuarioRol[]
+  docente Docente?
+  alumno  Alumno?
+}
+
+model UsuarioRol {
+  usuarioId Int
+  roleId    Int
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  role    Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, roleId])
+}
+
+//////////////////////////
+// ESTRUCTURA ACADÉMICA
+//////////////////////////
+
+model NivelAcademico {
+  id        Int     @id @default(autoincrement())
+  nombre    String
+  modalidad String
+
+  planes PlanEstudios[]
+}
+
+model CicloEscolar {
+  id          Int      @id @default(autoincrement())
+  nombre      String
+  fechaInicio DateTime
+  fechaFin    DateTime
+  activo      Boolean  @default(false)
+
+  grupos         Grupo[]
+  evaluaciones   Evaluacion[]
+  conceptos      ConceptoPago[]
+  boletas        Boleta[]
+  asignaciones   AsignacionDocente[]   // 👈 agregar
+  inscripciones  Inscripcion[]         // 👈 agregar
+}
+
+model PlanEstudios {
+  id                Int     @id @default(autoincrement())
+  nombre            String
+  duracionSemestres Int
+
+  nivelId Int
+  nivel   NivelAcademico @relation(fields: [nivelId], references: [id])
+
+  semestres Semestre[]
+  alumnos   Alumno[]
+}
+
+model Semestre {
+  id     Int @id @default(autoincrement())
+  numero Int
+
+  planId Int
+  plan   PlanEstudios @relation(fields: [planId], references: [id])
+
+  materias Materia[]
+  grupos   Grupo[]
+}
+
+model Docente {
+  id             Int    @id @default(autoincrement())
+  usuarioId      Int    @unique
+  especialidad   String
+  gradoAcademico String
+  curp           String
+  telefono       String
+
+  usuario      Usuario @relation(fields: [usuarioId], references: [id])
+  asignaciones AsignacionDocente[]
+}
+
+model Alumno {
+  id           Int      @id @default(autoincrement())
+  matricula    String   @unique
+  usuarioId    Int      @unique
+  planId       Int
+  fechaIngreso DateTime
+  estatus      String
+
+  usuario Usuario      @relation(fields: [usuarioId], references: [id])
+  plan    PlanEstudios @relation(fields: [planId], references: [id])
+
+  inscripciones  Inscripcion[]
+  calificaciones Calificacion[]
+  asistencias    Asistencia[]
+  conceptos      AlumnoConcepto[]
+  pagos          Pago[]
+  boletas        Boleta[]
+}
+
+model Grupo {
+  id     Int    @id @default(autoincrement())
+  nombre String
+  turno  String
+
+  semestreId Int
+  cicloId    Int
+
+  semestre Semestre     @relation(fields: [semestreId], references: [id])
+  ciclo    CicloEscolar @relation(fields: [cicloId], references: [id])
+
+  inscripciones Inscripcion[]
+  asignaciones  AsignacionDocente[]
+}
+
+model Materia {
+  id       Int    @id @default(autoincrement())
+  nombre   String
+  clave    String
+  creditos Int
+  tipo     String
+
+  semestreId Int
+  semestre   Semestre @relation(fields: [semestreId], references: [id])
+
+  evaluaciones Evaluacion[]
+  asistencias  Asistencia[]
+  asignaciones AsignacionDocente[]
+}
+
+//////////////////////////
+// OPERACIÓN ACADÉMICA
+//////////////////////////
+
+model AsignacionDocente {
+  id        Int @id @default(autoincrement())
+  docenteId Int
+  materiaId Int
+  grupoId   Int
+  cicloId   Int
+
+  docente Docente      @relation(fields: [docenteId], references: [id])
+  materia Materia      @relation(fields: [materiaId], references: [id])
+  grupo   Grupo        @relation(fields: [grupoId], references: [id])
+  ciclo   CicloEscolar @relation(fields: [cicloId], references: [id])
+}
+
+model Inscripcion {
+  id       Int @id @default(autoincrement())
+  alumnoId Int
+  grupoId  Int
+  cicloId  Int
+
+  alumno Alumno       @relation(fields: [alumnoId], references: [id])
+  grupo  Grupo        @relation(fields: [grupoId], references: [id])
+  ciclo  CicloEscolar @relation(fields: [cicloId], references: [id])
+}
+
+model Evaluacion {
+  id         Int    @id @default(autoincrement())
+  materiaId  Int
+  cicloId    Int
+  nombre     String
+  porcentaje Float
+
+  materia Materia      @relation(fields: [materiaId], references: [id])
+  ciclo   CicloEscolar @relation(fields: [cicloId], references: [id])
+
+  calificaciones Calificacion[]
+}
+
+model Calificacion {
+  id           Int      @id @default(autoincrement())
+  alumnoId     Int
+  evaluacionId Int
+  calificacion Float
+  fecha        DateTime @default(now())
+
+  alumno     Alumno     @relation(fields: [alumnoId], references: [id])
+  evaluacion Evaluacion @relation(fields: [evaluacionId], references: [id])
+}
+
+model Asistencia {
+  id        Int      @id @default(autoincrement())
+  alumnoId  Int
+  materiaId Int
+  fecha     DateTime
+  estado    String
+
+  alumno  Alumno  @relation(fields: [alumnoId], references: [id])
+  materia Materia @relation(fields: [materiaId], references: [id])
+}
+
+//////////////////////////
+// FINANZAS
+//////////////////////////
+
+model ConceptoPago {
+  id          Int     @id @default(autoincrement())
+  nombre      String
+  monto       Float
+  obligatorio Boolean
+  cicloId     Int
+
+  ciclo    CicloEscolar   @relation(fields: [cicloId], references: [id])
+  alumnos  AlumnoConcepto[]
+  pagos    Pago[]
+}
+
+model AlumnoConcepto {
+  alumnoId      Int
+  conceptoId    Int
+  montoAsignado Float
+
+  alumno   Alumno       @relation(fields: [alumnoId], references: [id], onDelete: Cascade)
+  concepto ConceptoPago @relation(fields: [conceptoId], references: [id], onDelete: Cascade)
+
+  @@id([alumnoId, conceptoId])
+}
+
+model Pago {
+  id          Int      @id @default(autoincrement())
+  alumnoId    Int
+  conceptoId  Int
+  montoPagado Float
+  metodoPago  String
+  referencia  String
+  fechaPago   DateTime @default(now())
+
+  alumno   Alumno       @relation(fields: [alumnoId], references: [id])
+  concepto ConceptoPago @relation(fields: [conceptoId], references: [id])
+}
+
+//////////////////////////
+// BOLETAS
+//////////////////////////
+
+model Boleta {
+  id              Int      @id @default(autoincrement())
+  alumnoId        Int
+  cicloId         Int
+  promedioGeneral Float
+  fechaGeneracion DateTime @default(now())
+  urlPdf          String
+
+  alumno Alumno       @relation(fields: [alumnoId], references: [id])
+  ciclo  CicloEscolar @relation(fields: [cicloId], references: [id])
+}

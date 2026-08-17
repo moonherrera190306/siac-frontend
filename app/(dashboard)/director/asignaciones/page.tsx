@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
+import { notificar } from "@/lib/notificar";
 
 export default function DirectorAsignacionesPage() {
 
@@ -33,9 +35,6 @@ export default function DirectorAsignacionesPage() {
     setCicloEscolarId
   ] = useState("");
 
-  const [horario, setHorario] =
-    useState("");
-
   const [aula, setAula] =
     useState("");
 
@@ -52,18 +51,19 @@ export default function DirectorAsignacionesPage() {
 
   try {
 
-    const token =
-      localStorage.getItem("token");
+    // 🔐 El token vive en una cookie httpOnly y no se puede leer desde aquí.
+  // Solo se comprueba que exista una sesión guardada.
+  const sesion =
+    typeof window !== "undefined"
+      ? localStorage.getItem("user")
+      : null;
 
     // 📚 ASIGNACIONES
     const resAsignaciones =
       await fetch(
-        "http://localhost:4000/api/asignaciones",
+        `${API_URL}/api/asignaciones`,
         {
-          headers: {
-            Authorization:
-              `Bearer ${token}`
-          }
+          credentials: "include",
         }
       );
 
@@ -73,12 +73,9 @@ export default function DirectorAsignacionesPage() {
     // 📘 MATERIAS
     const resMaterias =
       await fetch(
-        "http://localhost:4000/api/materias",
+        `${API_URL}/api/materias`,
         {
-          headers: {
-            Authorization:
-              `Bearer ${token}`
-          }
+          credentials: "include",
         }
       );
 
@@ -88,12 +85,9 @@ export default function DirectorAsignacionesPage() {
     // 👨‍🏫 DOCENTES
     const resDocentes =
       await fetch(
-        "http://localhost:4000/api/docentes",
+        `${API_URL}/api/docentes`,
         {
-          headers: {
-            Authorization:
-              `Bearer ${token}`
-          }
+          credentials: "include",
         }
       );
 
@@ -103,12 +97,9 @@ export default function DirectorAsignacionesPage() {
     // 👥 GRUPOS
     const resGrupos =
       await fetch(
-        "http://localhost:4000/api/grupos",
+        `${API_URL}/api/grupos`,
         {
-          headers: {
-            Authorization:
-              `Bearer ${token}`
-          }
+          credentials: "include",
         }
       );
 
@@ -118,12 +109,9 @@ export default function DirectorAsignacionesPage() {
     // 📚 CICLOS
     const resCiclos =
       await fetch(
-        "http://localhost:4000/api/ciclos",
+        `${API_URL}/api/ciclos`,
         {
-          headers: {
-            Authorization:
-              `Bearer ${token}`
-          }
+          credentials: "include",
         }
       );
 
@@ -182,9 +170,9 @@ export default function DirectorAsignacionesPage() {
 
     console.error(error);
 
-    alert(
+    notificar(
       "Error cargando datos"
-    );
+    , "error");
 
   } finally {
 
@@ -206,9 +194,9 @@ export default function DirectorAsignacionesPage() {
         !cicloEscolarId
       ) {
 
-        alert(
+        notificar(
           "Completa todos los campos"
-        );
+        , "alerta");
 
         return;
       }
@@ -217,23 +205,17 @@ export default function DirectorAsignacionesPage() {
 
         setCreating(true);
 
-        const token =
-          localStorage.getItem("token");
-
         const res = await fetch(
-          "http://localhost:4000/api/asignaciones",
+          `${API_URL}/api/asignaciones`,
           {
 
             method: "POST",
 
+            credentials: "include",
             headers: {
 
               "Content-Type":
-                "application/json",
-
-              Authorization:
-                `Bearer ${token}`
-
+                "application/json"
             },
 
             body: JSON.stringify({
@@ -242,7 +224,6 @@ export default function DirectorAsignacionesPage() {
               docenteId,
               grupoId,
               cicloEscolarId,
-              horario,
               aula
 
             })
@@ -262,15 +243,14 @@ export default function DirectorAsignacionesPage() {
 
         }
 
-        alert(
+        notificar(
           "✅ Asignación creada"
-        );
+        , "exito");
 
         setMateriaId("");
         setDocenteId("");
         setGrupoId("");
         setCicloEscolarId("");
-        setHorario("");
         setAula("");
 
         fetchData();
@@ -279,9 +259,9 @@ export default function DirectorAsignacionesPage() {
 
         console.error(error);
 
-        alert(
+        notificar(
           error.message
-        );
+        , "error");
 
       } finally {
 
@@ -305,19 +285,13 @@ export default function DirectorAsignacionesPage() {
 
       try {
 
-        const token =
-          localStorage.getItem("token");
-
         const res = await fetch(
-          `http://localhost:4000/api/asignaciones/${id}`,
+          `${API_URL}/api/asignaciones/${id}`,
           {
 
             method: "DELETE",
 
-            headers: {
-              Authorization:
-                `Bearer ${token}`
-            }
+            credentials: "include",
 
           }
         );
@@ -334,9 +308,9 @@ export default function DirectorAsignacionesPage() {
 
         }
 
-        alert(
+        notificar(
           "✅ Asignación eliminada"
-        );
+        , "exito");
 
         fetchData();
 
@@ -344,9 +318,9 @@ export default function DirectorAsignacionesPage() {
 
         console.error(error);
 
-        alert(
+        notificar(
           error.message
-        );
+        , "error");
 
       }
     };
@@ -511,18 +485,8 @@ export default function DirectorAsignacionesPage() {
 
           </select>
 
-          {/* HORARIO */}
-          <input
-            type="text"
-            placeholder="Lun-Mie 7am-9am"
-            value={horario}
-            onChange={(e) =>
-              setHorario(
-                e.target.value
-              )
-            }
-            className="border rounded-xl p-3"
-          />
+          {/* El horario ya no es texto libre: se captura en bloques
+              reales desde la pantalla Horarios, que valida choques. */}
 
           {/* AULA */}
           <input
@@ -594,7 +558,7 @@ export default function DirectorAsignacionesPage() {
                     </th>
 
                     <th className="text-left p-3">
-                      Horario
+                      Bloques
                     </th>
 
                     <th className="text-left p-3">
@@ -644,9 +608,21 @@ export default function DirectorAsignacionesPage() {
                         </td>
 
                         <td className="p-3">
-                          {
-                            a?.horario || "-"
-                          }
+                          {(a?.horarios ?? []).length === 0 ? (
+                            <a
+                              href="/director/horarios"
+                              className="text-sm text-blue-600 underline"
+                            >
+                              Sin horario
+                            </a>
+                          ) : (
+                            <a
+                              href="/director/horarios"
+                              className="text-sm text-blue-600 underline"
+                            >
+                              {(a?.horarios ?? []).length} bloque(s)
+                            </a>
+                          )}
                         </td>
 
                         <td className="p-3">

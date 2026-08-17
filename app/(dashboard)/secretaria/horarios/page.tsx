@@ -1,201 +1,184 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
 
-type Grupo = {
-  id?: string;
-
-  nombre?: string;
-
-  turno?: string;
-
-  aula?: string;
-
-  horario?: string;
+const ETIQUETA: Record<string, string> = {
+  LUNES: "Lunes",
+  MARTES: "Martes",
+  MIERCOLES: "Miércoles",
+  JUEVES: "Jueves",
+  VIERNES: "Viernes",
+  SABADO: "Sábado",
 };
 
-function normalizeData(data: any): Grupo[] {
-  if (Array.isArray(data)) return data;
-
-  if (Array.isArray(data?.data)) {
-    return data.data;
-  }
-
-  return [];
-}
+type Grupo = {
+  id: string;
+  nombre: string;
+  turno?: { nombre?: string } | null;
+  semestre?: { nombre?: string } | null;
+  _count?: { alumnos?: number };
+};
 
 export default function SecretariaHorariosPage() {
-  const [horarios, setHorarios] =
-    useState<Grupo[]>([]);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState("");
+  const [grupos, setGrupos] = useState<Grupo[]>([]);
+  const [seleccionado, setSeleccionado] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [cargandoDetalle, setCargandoDetalle] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    async function fetchHorarios() {
+    const cargar = async () => {
       try {
-        setLoading(true);
-        setError("");
+        const res = await fetch(`${API_URL}/api/grupos`, {
+          credentials: "include",
+        });
 
-        const token =
-          localStorage.getItem("token");
-
-        const res = await fetch(
-          "http://localhost:4000/api/grupos",
-          {
-            method: "GET",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        const response =
-          await res.json();
+        const json = await res.json();
 
         if (!res.ok) {
-          throw new Error(
-            response?.message ||
-              "Error cargando horarios"
-          );
+          throw new Error(json?.message || "Error al cargar grupos");
         }
 
-        const data =
-          response?.data || response;
-
-        setHorarios(
-          normalizeData(data)
-        );
-      } catch (err: any) {
-        console.error(err);
-
-        setError(
-          err?.message ||
-            "Error interno del servidor"
-        );
-
-        setHorarios([]);
+        setGrupos(json?.data ?? []);
+      } catch (e: any) {
+        setError(e.message || "Error al cargar grupos");
       } finally {
         setLoading(false);
       }
-    }
+    };
 
-    fetchHorarios();
+    cargar();
   }, []);
 
-  if (loading) {
-    return (
-      <p className="p-6">
-        Cargando horarios...
-      </p>
-    );
-  }
+  const abrir = async (id: string) => {
+    try {
+      setCargandoDetalle(true);
 
-  if (error) {
-    return (
-      <div className="p-6">
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
-          Error: {error}
-        </div>
-      </div>
-    );
+      const res = await fetch(`${API_URL}/api/grupos/${id}`, {
+        credentials: "include",
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json?.message || "Error al cargar el grupo");
+      }
+
+      setSeleccionado(json?.data ?? null);
+    } catch (e: any) {
+      setError(e.message || "Error al cargar el grupo");
+    } finally {
+      setCargandoDetalle(false);
+    }
+  };
+
+  if (loading) return <p className="p-6">Cargando...</p>;
+
+  // Bloques reales del grupo seleccionado.
+  const bloques: any[] = [];
+
+  for (const a of seleccionado?.asignaciones ?? []) {
+    for (const h of a.horarios ?? []) {
+      bloques.push({
+        ...h,
+        materia: a.materia?.nombre,
+        docente: a.docente?.nombre || a.docente?.user?.name,
+        aula: h.aula || a.aula,
+      });
+    }
   }
 
   return (
-    <div className="space-y-6 p-6">
-      {/* HEADER */}
+    <div className="space-y-6">
       <section className="rounded-2xl border bg-white p-6 shadow-sm">
-        <h1 className="text-3xl font-bold">
-          Horarios
-        </h1>
-
-        <p className="text-gray-600">
-          Organización horaria
-          institucional
-        </p>
+        <h1 className="text-3xl font-bold">Horarios</h1>
+        <p className="text-gray-500">Selecciona un grupo para ver su horario</p>
       </section>
 
-      {/* TABLA */}
-      <section className="rounded-2xl bg-white p-6 shadow">
-        {(horarios ?? []).length ===
-        0 ? (
-          <p className="text-gray-500">
-            No hay horarios registrados.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-gray-500">
-                  <th className="p-3">
-                    Grupo
-                  </th>
+      {error && (
+        <p className="rounded-xl bg-red-50 p-4 text-red-600">{error}</p>
+      )}
 
-                  <th className="p-3">
-                    Turno
-                  </th>
+      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-4">
+        {grupos.map((g) => (
+          <button
+            key={g.id}
+            onClick={() => abrir(g.id)}
+            className={`rounded-2xl border bg-white p-5 text-left shadow-sm transition hover:border-blue-400 ${
+              seleccionado?.id === g.id ? "border-blue-500" : ""
+            }`}
+          >
+            <p className="text-lg font-semibold">{g.nombre}</p>
 
-                  <th className="p-3">
-                    Horario
-                  </th>
+            <p className="text-sm text-gray-500">
+              {g.semestre?.nombre || "Sin semestre"}
+            </p>
 
-                  <th className="p-3">
-                    Aula
-                  </th>
+            {/* 🔥 Antes se mostraba "07:00 - 14:00" fijo para todos. */}
+            <p className="text-xs text-gray-400">
+              {g.turno?.nombre || "Sin turno"} · {g._count?.alumnos ?? 0} alumnos
+            </p>
+          </button>
+        ))}
+      </div>
 
-                  <th className="p-3 text-right">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
+      {grupos.length === 0 && !error && (
+        <div className="rounded-2xl border bg-white p-8 text-center text-gray-500">
+          No hay grupos registrados.
+        </div>
+      )}
 
-              <tbody>
-                {(horarios ?? []).map(
-                  (h, index) => (
-                    <tr
-                      key={h?.id ?? index}
-                      className="border-b"
-                    >
-                      <td className="p-3">
-                        {h?.nombre ??
-                          "Sin grupo"}
-                      </td>
+      {cargandoDetalle && <p className="text-gray-500">Cargando horario...</p>}
 
-                      <td className="p-3">
-                        {h?.turno ??
-                          "Matutino"}
-                      </td>
+      {seleccionado && !cargandoDetalle && (
+        <section className="rounded-2xl border bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-bold">
+            Horario del grupo {seleccionado.nombre}
+          </h2>
 
-                      <td className="p-3">
-                        {h?.horario ??
-                          "07:00 - 14:00"}
-                      </td>
+          {bloques.length === 0 ? (
+            <p className="mt-3 text-gray-500">
+              Este grupo todavía no tiene horarios capturados.
+            </p>
+          ) : (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-50 text-gray-600">
+                  <tr>
+                    <th className="px-4 py-3">Día</th>
+                    <th className="px-4 py-3">Horario</th>
+                    <th className="px-4 py-3">Materia</th>
+                    <th className="px-4 py-3">Docente</th>
+                    <th className="px-4 py-3">Aula</th>
+                  </tr>
+                </thead>
 
-                      <td className="p-3">
-                        {h?.aula ??
-                          "Aula 1"}
-                      </td>
-
-                      <td className="p-3 text-right">
-                        <button className="rounded bg-slate-100 px-3 py-1 hover:bg-slate-200">
-                          Editar
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+                <tbody>
+                  {bloques
+                    .sort(
+                      (a, b) =>
+                        Object.keys(ETIQUETA).indexOf(a.dia) -
+                          Object.keys(ETIQUETA).indexOf(b.dia) ||
+                        a.horaInicio.localeCompare(b.horaInicio)
+                    )
+                    .map((b, i) => (
+                      <tr key={i} className="border-t">
+                        <td className="px-4 py-3">{ETIQUETA[b.dia] || b.dia}</td>
+                        <td className="px-4 py-3">
+                          {b.horaInicio} - {b.horaFin}
+                        </td>
+                        <td className="px-4 py-3">{b.materia}</td>
+                        <td className="px-4 py-3">{b.docente || "—"}</td>
+                        <td className="px-4 py-3">{b.aula || "—"}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }

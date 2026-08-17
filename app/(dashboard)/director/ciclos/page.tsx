@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
+import { notificar } from "@/lib/notificar";
 
 export default function DirectorCiclosPage() {
 
@@ -20,16 +22,17 @@ export default function DirectorCiclosPage() {
 
     try {
 
-      const token =
-        localStorage.getItem("token");
+      // 🔐 El token vive en una cookie httpOnly y no se puede leer desde aquí.
+  // Solo se comprueba que exista una sesión guardada.
+  const sesion =
+    typeof window !== "undefined"
+      ? localStorage.getItem("user")
+      : null;
 
       const res = await fetch(
-        "http://localhost:4000/api/ciclos",
+        `${API_URL}/api/ciclos`,
         {
-          headers: {
-            Authorization:
-              `Bearer ${token}`
-          }
+          credentials: "include",
         }
       );
 
@@ -51,9 +54,9 @@ export default function DirectorCiclosPage() {
 
       console.error(error);
 
-      alert(
+      notificar(
         "Error obteniendo ciclos"
-      );
+      , "error");
 
     } finally {
 
@@ -68,7 +71,7 @@ export default function DirectorCiclosPage() {
   const crearCiclo = async () => {
 
     if (!nombre) {
-      alert("Nombre requerido");
+      notificar("Nombre requerido", "alerta");
       return;
     }
 
@@ -76,20 +79,15 @@ export default function DirectorCiclosPage() {
 
       setCreating(true);
 
-      const token =
-        localStorage.getItem("token");
-
       const res = await fetch(
-        "http://localhost:4000/api/ciclos",
+        `${API_URL}/api/ciclos`,
         {
           method: "POST",
 
+          credentials: "include",
           headers: {
             "Content-Type":
-              "application/json",
-
-            Authorization:
-              `Bearer ${token}`
+              "application/json"
           },
 
           body: JSON.stringify({
@@ -110,9 +108,9 @@ export default function DirectorCiclosPage() {
         );
       }
 
-      alert(
+      notificar(
         "✅ Ciclo creado"
-      );
+      , "exito");
 
       setNombre("");
       setFechaInicio("");
@@ -124,9 +122,9 @@ export default function DirectorCiclosPage() {
 
       console.error(error);
 
-      alert(
+      notificar(
         error.message
-      );
+      , "error");
 
     } finally {
 
@@ -144,18 +142,12 @@ export default function DirectorCiclosPage() {
 
     try {
 
-      const token =
-        localStorage.getItem("token");
-
       const res = await fetch(
-        `http://localhost:4000/api/ciclos/activar/${id}`,
+        `${API_URL}/api/ciclos/activar/${id}`,
         {
           method: "PUT",
 
-          headers: {
-            Authorization:
-              `Bearer ${token}`
-          }
+          credentials: "include",
         }
       );
 
@@ -169,9 +161,9 @@ export default function DirectorCiclosPage() {
         );
       }
 
-      alert(
+      notificar(
         "✅ Ciclo activado"
-      );
+      , "exito");
 
       fetchCiclos();
 
@@ -179,9 +171,9 @@ export default function DirectorCiclosPage() {
 
       console.error(error);
 
-      alert(
+      notificar(
         error.message
-      );
+      , "error");
 
     }
   };

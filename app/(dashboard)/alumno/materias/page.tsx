@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
 
 export default function AlumnoMateriasPage() {
   const [materias, setMaterias] = useState<any[]>([]);
@@ -10,7 +11,12 @@ export default function AlumnoMateriasPage() {
   useEffect(() => {
     const fetchMaterias = async () => {
       try {
-        const token = localStorage.getItem("token");
+        // 🔐 El token vive en una cookie httpOnly y no se puede leer desde aquí.
+  // Solo se comprueba que exista una sesión guardada.
+  const sesion =
+    typeof window !== "undefined"
+      ? localStorage.getItem("user")
+      : null;
 
         const user = JSON.parse(
           localStorage.getItem("user") || "{}"
@@ -20,11 +26,9 @@ export default function AlumnoMateriasPage() {
           user?.alumnoId || user?.id;
 
         const res = await fetch(
-          `http://localhost:4000/api/alumnos/materias/${alumnoId}`,
+          `${API_URL}/api/alumnos/materias/${alumnoId}`,
           {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+            credentials: "include",
           }
         );
 

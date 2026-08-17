@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { API_URL } from "@/lib/config";
 
 type Alumno = {
   id?: string;
@@ -48,14 +49,17 @@ export default function SecretariaDashboardPage() {
         setLoading(true);
         setError("");
 
-        const token =
-          localStorage.getItem("token");
+        // 🔐 El token vive en una cookie httpOnly y no se puede leer desde aquí.
+  // Solo se comprueba que exista una sesión guardada.
+  const sesion =
+    typeof window !== "undefined"
+      ? localStorage.getItem("user")
+      : null;
 
-        const headers = {
-          "Content-Type":
-            "application/json",
-
-          Authorization: `Bearer ${token}`,
+        // 🔐 La cookie httpOnly viaja sola con credentials: "include".
+        const opciones: RequestInit = {
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
         };
 
         const [
@@ -64,18 +68,18 @@ export default function SecretariaDashboardPage() {
           documentosRes,
         ] = await Promise.all([
           fetch(
-            "http://localhost:4000/api/alumnos",
-            { headers }
+            `${API_URL}/api/alumnos?perPage=200`,
+            opciones
           ),
 
           fetch(
-            "http://localhost:4000/api/grupos",
-            { headers }
+            `${API_URL}/api/grupos`,
+            opciones
           ),
 
           fetch(
-            "http://localhost:4000/api/documentos",
-            { headers }
+            `${API_URL}/api/documentos`,
+            opciones
           ),
         ]);
 

@@ -1,407 +1,206 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
+
+const COLOR: Record<string, string> = {
+  PRESENTE: "bg-green-100 text-green-700",
+  RETARDO: "bg-amber-100 text-amber-700",
+  JUSTIFICADO: "bg-blue-100 text-blue-700",
+  FALTA: "bg-red-100 text-red-700",
+};
 
 export default function AlumnoAsistenciaPage() {
+  const [resumen, setResumen] = useState<any[]>([]);
+  const [detalle, setDetalle] = useState<any[]>([]);
 
-  const [asistencias, setAsistencias] =
-    useState<any[]>([]);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState("");
-
-  // ========================================
-  // FETCH
-  // ========================================
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-
-    const fetchAsistencias = async () => {
-
+    const cargar = async () => {
       try {
+        const guardado = localStorage.getItem("user");
 
-        const token =
-          localStorage.getItem("token");
-
-        const user = JSON.parse(
-          localStorage.getItem("user") || "{}"
-        );
-
-        const alumnoId =
-          user?.alumnoId || user?.id;
-
-        const res = await fetch(
-          `http://localhost:4000/api/asistencias/alumno/${alumnoId}`,
-          {
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-          }
-        );
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(
-            data.message ||
-            "Error obteniendo asistencias"
-          );
+        if (!guardado) {
+          window.location.href = "/login";
+          return;
         }
 
-        setAsistencias(
-          data.data || []
+        const user = JSON.parse(guardado);
+        const alumnoId = user?.alumnoId || user?.id;
+
+        const res = await fetch(
+          `${API_URL}/api/asistencias/alumno/${alumnoId}`,
+          { credentials: "include" }
         );
 
-      } catch (err: any) {
+        const json = await res.json();
 
-        console.error(err);
+        if (!res.ok) {
+          throw new Error(json?.message || "Error al cargar la asistencia");
+        }
 
-        setError(err.message);
-
+        setResumen(json?.data?.resumen ?? []);
+        setDetalle(json?.data?.detalle ?? []);
+      } catch (e: any) {
+        setError(e.message || "Error al cargar la asistencia");
       } finally {
-
         setLoading(false);
-
       }
     };
 
-    fetchAsistencias();
-
+    cargar();
   }, []);
 
-  // ========================================
-  // ESTADÍSTICAS
-  // ========================================
+  if (loading) return <p className="p-6">Cargando...</p>;
 
-  const total =
-    asistencias.length;
+  const conDato = resumen.filter((r) => r.porcentaje !== null);
 
-  const presentes =
-    asistencias.filter(
-      (a) => a.presente
-    ).length;
+  const global =
+    conDato.length === 0
+      ? null
+      : (
+          conDato.reduce((acc, r) => acc + Number(r.porcentaje), 0) /
+          conDato.length
+        ).toFixed(1);
 
-  const faltas =
-    asistencias.filter(
-      (a) => !a.presente
-    ).length;
-
-  const porcentaje =
-    total > 0
-      ? Math.round(
-          (presentes / total) * 100
-        )
-      : 0;
-
-  // ========================================
-  // AGRUPAR POR MES
-  // ========================================
-
-  const historial =
-    useMemo(() => {
-
-      const meses: any = {};
-
-      asistencias.forEach((a) => {
-
-        const fecha =
-          new Date(a.fecha);
-
-        const mes =
-          fecha.toLocaleString(
-            "es-MX",
-            {
-              month: "long",
-              year: "numeric",
-            }
-          );
-
-        if (!meses[mes]) {
-          meses[mes] = [];
-        }
-
-        meses[mes].push(a);
-
-      });
-
-      return meses;
-
-    }, [asistencias]);
-
-  // ========================================
-  // LOADING
-  // ========================================
-
-  if (loading) {
-    return (
-      <div className="p-6">
-        Cargando asistencias...
-      </div>
-    );
-  }
-
-  // ========================================
-  // ERROR
-  // ========================================
-
-  if (error) {
-    return (
-      <div className="bg-red-100 text-red-600 p-4 rounded-2xl">
-        {error}
-      </div>
-    );
-  }
-
-  // ========================================
-  // UI
-  // ========================================
+  const totalFaltas = resumen.reduce(
+    (acc, r) =>
+      acc + r.faltasMes1 + r.faltasMes2 + r.faltasMes3 + r.faltasMes4,
+    0
+  );
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6">
+      <section className="rounded-3xl border bg-white p-6 shadow-sm">
+        <h1 className="text-3xl font-bold">Mi asistencia</h1>
 
-      {/* HEADER */}
-      <section className="bg-white rounded-3xl shadow p-6">
-
-        <h1 className="text-4xl font-bold">
-          Asistencias 📚
-        </h1>
-
-        <p className="text-gray-500 mt-2">
-          Consulta tus asistencias,
-          faltas y progreso académico
+        <p className="text-gray-500">
+          {global === null
+            ? "Todavía no hay asistencia registrada"
+            : `${global}% de asistencia · ${totalFaltas} falta(s)`}
         </p>
-
       </section>
 
-      {/* STATS */}
-      <div className="grid md:grid-cols-4 gap-6">
+      {error && (
+        <p className="rounded-xl bg-red-50 p-4 text-red-600">{error}</p>
+      )}
 
-        <div className="bg-white rounded-3xl shadow p-6">
+      {resumen.length === 0 && !error && (
+        <div className="rounded-3xl border bg-white p-8 text-center text-gray-500">
+          Tus maestros todavía no han registrado asistencia.
+        </div>
+      )}
 
-          <p className="text-gray-500">
-            Clases registradas
-          </p>
-
-          <h2 className="text-4xl font-bold mt-3">
-
-            {total}
-
+      {resumen.length > 0 && (
+        <section className="overflow-x-auto rounded-3xl border bg-white shadow-sm">
+          <h2 className="border-b px-5 py-4 text-lg font-semibold">
+            Acumulado por materia
           </h2>
 
-        </div>
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50 text-gray-600">
+              <tr>
+                <th className="px-4 py-3">Materia</th>
+                <th className="px-3 py-3 text-center">Mes 1</th>
+                <th className="px-3 py-3 text-center">Mes 2</th>
+                <th className="px-3 py-3 text-center">Mes 3</th>
+                <th className="px-3 py-3 text-center">Mes 4</th>
+                <th className="px-3 py-3 text-center">Faltas</th>
+                <th className="px-3 py-3 text-center">%</th>
+              </tr>
+            </thead>
 
-        <div className="bg-white rounded-3xl shadow p-6">
+            <tbody>
+              {resumen.map((r) => {
+                const faltas =
+                  r.faltasMes1 + r.faltasMes2 + r.faltasMes3 + r.faltasMes4;
 
-          <p className="text-gray-500">
-            Asistencias
-          </p>
+                return (
+                  <tr key={r.id} className="border-t">
+                    <td className="px-4 py-2 font-medium">
+                      {r.materia?.nombre}
+                    </td>
 
-          <h2 className="text-4xl font-bold text-green-600 mt-3">
+                    <td className="px-3 py-2 text-center">{r.asisMes1}</td>
+                    <td className="px-3 py-2 text-center">{r.asisMes2}</td>
+                    <td className="px-3 py-2 text-center">{r.asisMes3}</td>
+                    <td className="px-3 py-2 text-center">{r.asisMes4}</td>
 
-            {presentes}
+                    <td className="px-3 py-2 text-center">{faltas}</td>
 
+                    <td className="px-3 py-2 text-center">
+                      <span
+                        className={`rounded-full px-2 py-1 text-xs ${
+                          r.porcentaje === null
+                            ? "bg-gray-100 text-gray-600"
+                            : r.porcentaje < 80
+                            ? "bg-red-100 text-red-700"
+                            : r.porcentaje < 90
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-green-100 text-green-700"
+                        }`}
+                      >
+                        {r.porcentaje === null ? "—" : `${r.porcentaje}%`}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {detalle.length > 0 && (
+        <section className="overflow-x-auto rounded-3xl border bg-white shadow-sm">
+          <h2 className="border-b px-5 py-4 text-lg font-semibold">
+            Últimas clases
           </h2>
 
-        </div>
-
-        <div className="bg-white rounded-3xl shadow p-6">
-
-          <p className="text-gray-500">
-            Faltas
-          </p>
-
-          <h2 className="text-4xl font-bold text-red-500 mt-3">
-
-            {faltas}
-
-          </h2>
-
-        </div>
-
-        <div className="bg-white rounded-3xl shadow p-6">
-
-          <p className="text-gray-500">
-            Asistencia global
-          </p>
-
-          <h2 className="text-4xl font-bold text-blue-600 mt-3">
-
-            {porcentaje}%
-
-          </h2>
-
-        </div>
-
-      </div>
-
-      {/* BARRA */}
-      <section className="bg-white rounded-3xl shadow p-6">
-
-        <div className="flex justify-between mb-3">
-
-          <span className="font-semibold">
-
-            Progreso de asistencia
-
-          </span>
-
-          <span className="font-bold">
-
-            {porcentaje}%
-
-          </span>
-
-        </div>
-
-        <div className="h-4 w-full rounded-full bg-slate-200 overflow-hidden">
-
-          <div
-            style={{
-              width: `${porcentaje}%`
-            }}
-            className={`h-full rounded-full ${
-              porcentaje >= 80
-                ? "bg-green-500"
-                : porcentaje >= 60
-                  ? "bg-yellow-500"
-                  : "bg-red-500"
-            }`}
-          />
-
-        </div>
-
-      </section>
-
-      {/* HISTORIAL */}
-      <section className="bg-white rounded-3xl shadow p-6">
-
-        <h2 className="text-2xl font-bold mb-6">
-
-          Historial mensual
-
-        </h2>
-
-        {Object.keys(historial)
-          .length === 0 ? (
-
-          <div className="text-center py-10 text-gray-500">
-
-            No hay asistencias registradas
-
-          </div>
-
-        ) : (
-
-          <div className="space-y-8">
-
-            {Object.entries(historial)
-              .map(
-                ([mes, registros]: any) => (
-
-                <div key={mes}>
-
-                  <h3 className="text-xl font-bold capitalize mb-4">
-
-                    {mes}
-
-                  </h3>
-
-                  <div className="overflow-x-auto border rounded-2xl">
-
-                    <table className="w-full">
-
-                      <thead className="bg-slate-100">
-
-                        <tr className="text-left">
-
-                          <th className="p-4">
-                            Fecha
-                          </th>
-
-                          <th className="p-4">
-                            Materia
-                          </th>
-
-                          <th className="p-4">
-                            Estado
-                          </th>
-
-                        </tr>
-
-                      </thead>
-
-                      <tbody>
-
-                        {registros.map(
-                          (a: any) => (
-
-                          <tr
-                            key={a.id}
-                            className="border-t"
-                          >
-
-                            <td className="p-4">
-
-                              {new Date(
-                                a.fecha
-                              ).toLocaleDateString(
-                                "es-MX"
-                              )}
-
-                            </td>
-
-                            <td className="p-4 font-medium">
-
-                              {
-                                a?.materia
-                                  ?.nombre ||
-                                "Materia"
-                              }
-
-                            </td>
-
-                            <td className="p-4">
-
-                              <span
-                                className={`rounded-full px-4 py-1 text-sm font-semibold ${
-                                  a.presente
-                                    ? "bg-green-100 text-green-700"
-                                    : "bg-red-100 text-red-600"
-                                }`}
-                              >
-
-                                {a.presente
-                                  ? "Presente"
-                                  : "Falta"}
-
-                              </span>
-
-                            </td>
-
-                          </tr>
-
-                        ))}
-
-                      </tbody>
-
-                    </table>
-
-                  </div>
-
-                </div>
-
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50 text-gray-600">
+              <tr>
+                <th className="px-4 py-3">Fecha</th>
+                <th className="px-4 py-3">Materia</th>
+                <th className="px-4 py-3">Tema</th>
+                <th className="px-4 py-3">Estado</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {detalle.slice(0, 40).map((d) => (
+                <tr key={d.id} className="border-t">
+                  <td className="px-4 py-2">
+                    {d.clase?.fecha
+                      ? new Date(d.clase.fecha).toLocaleDateString("es-MX")
+                      : "—"}
+                  </td>
+
+                  <td className="px-4 py-2">
+                    {d.clase?.asignacion?.materia?.nombre || "—"}
+                  </td>
+
+                  <td className="px-4 py-2 text-gray-500">
+                    {d.clase?.tema || "—"}
+                  </td>
+
+                  <td className="px-4 py-2">
+                    <span
+                      className={`rounded-full px-2 py-1 text-xs ${
+                        COLOR[d.estado] || "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {d.estado}
+                    </span>
+                  </td>
+                </tr>
               ))}
-
-          </div>
-
-        )}
-
-      </section>
-
+            </tbody>
+          </table>
+        </section>
+      )}
     </div>
   );
 }

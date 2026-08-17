@@ -1,288 +1,221 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
+import { abrirRecibo } from "@/lib/documentos";
 
-type Pago = {
-  id?: string;
-  concepto?: string;
-  monto?: number | string | null;
-  pagadoEn?: string | null;
-
-  alumno?: {
-    user?: {
-      name?: string;
-    };
-  };
+type Recibo = {
+  id: string;
+  folio: number;
+  total: number;
+  estado: string;
+  metodo: string;
+  pagadoEn: string;
+  alumno?: { matricula?: string; user?: { name?: string } };
+  detalles?: { cantidad: number; monto: number; concepto?: { nombre?: string } }[];
 };
 
-function normalizeData(result: any): Pago[] {
-  if (Array.isArray(result)) return result;
-
-  if (Array.isArray(result?.pagos)) {
-    return result.pagos;
-  }
-
-  if (Array.isArray(result?.data)) {
-    return result.data;
-  }
-
-  if (Array.isArray(result?.data?.pagos)) {
-    return result.data.pagos;
-  }
-
-  return [];
-}
-
-function formatMoney(value: unknown) {
-  const number = Number(value ?? 0);
-
-  if (Number.isNaN(number)) {
-    return "$0.00";
-  }
-
-  return number.toLocaleString("es-MX", {
-    style: "currency",
-    currency: "MXN",
-  });
-}
-
-export default function CajaHistorialPage() {
-  const [pagos, setPagos] = useState<Pago[]>([]);
-  const [search, setSearch] = useState("");
-  const [fecha, setFecha] = useState("");
-
+export default function CajaRecibosPage() {
+  const [recibos, setRecibos] = useState<Recibo[]>([]);
+  const [busqueda, setBusqueda] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const [detalle, setDetalle] = useState<Recibo | null>(null);
+
   useEffect(() => {
-    async function fetchPagos() {
+    const cargar = async () => {
       try {
-        setLoading(true);
-        setError("");
+        const res = await fetch(`${API_URL}/api/pagos?perPage=100`, {
+          credentials: "include",
+        });
 
-        const token = localStorage.getItem("token");
-
-        const res = await fetch(
-          "http://localhost:4000/api/pagos",
-          {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        const response = await res.json();
+        const json = await res.json();
 
         if (!res.ok) {
-          throw new Error(
-            response?.message ||
-              "Error al cargar historial"
-          );
+          throw new Error(json?.message || "Error al cargar los recibos");
         }
 
-        const data = response?.data || [];
-
-        setPagos(normalizeData(data));
-      } catch (err: any) {
-        console.error(err);
-
-        setError(
-          err?.message ||
-            "Error interno del servidor"
-        );
-
-        setPagos([]);
+        setRecibos(json?.data ?? []);
+      } catch (e: any) {
+        setError(e.message || "Error al cargar los recibos");
       } finally {
         setLoading(false);
       }
-    }
+    };
 
-    fetchPagos();
+    cargar();
   }, []);
 
-  const filtrados = useMemo(() => {
-    return (pagos ?? []).filter((p) => {
-      const alumno =
-        p?.alumno?.user?.name?.toLowerCase() ||
-        "";
+  const filtrados = recibos.filter((r) => {
+    const texto = busqueda.trim().toLowerCase();
 
-      const concepto =
-        p?.concepto?.toLowerCase() || "";
+    if (!texto) return true;
 
-      const texto = `${alumno} ${concepto}`;
-
-      const coincideTexto = texto.includes(
-        search.toLowerCase()
-      );
-
-      let coincideFecha = true;
-
-      if (fecha) {
-        if (!p?.pagadoEn) {
-          coincideFecha = false;
-        } else {
-          const fechaPago = new Date(
-            p.pagadoEn
-          );
-
-          if (
-            Number.isNaN(fechaPago.getTime())
-          ) {
-            coincideFecha = false;
-          } else {
-            coincideFecha =
-              fechaPago
-                .toISOString()
-                .slice(0, 10) === fecha;
-          }
-        }
-      }
-
-      return coincideTexto && coincideFecha;
-    });
-  }, [pagos, search, fecha]);
-
-  if (loading) {
     return (
-      <div className="p-6">
-        <p>Cargando historial...</p>
-      </div>
+      String(r.folio).includes(texto) ||
+      (r.alumno?.user?.name || "").toLowerCase().includes(texto) ||
+      (r.alumno?.matricula || "").toLowerCase().includes(texto)
     );
-  }
+  });
 
-  if (error) {
-    return (
-      <div className="p-6">
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
-          {error}
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <p className="p-6">Cargando...</p>;
 
   return (
-    <div className="space-y-6 p-6">
-      <section className="rounded-2xl bg-white p-6 shadow">
-        <h1 className="text-3xl font-bold">
-          Historial
-        </h1>
-
-        <p className="text-gray-500">
-          Movimientos financieros registrados
-          en caja
-        </p>
-      </section>
-
-      <section className="rounded-2xl bg-white p-6 shadow">
-        {/* FILTROS */}
-        <div className="mb-4 flex flex-col gap-3 md:flex-row">
-          <input
-            type="text"
-            placeholder="Buscar alumno o concepto..."
-            value={search}
-            onChange={(e) =>
-              setSearch(e.target.value)
-            }
-            className="w-full rounded-lg border p-3 outline-none focus:border-blue-500"
-          />
-
-          <input
-            type="date"
-            value={fecha}
-            onChange={(e) =>
-              setFecha(e.target.value)
-            }
-            className="rounded-lg border p-3 outline-none focus:border-blue-500"
-          />
+    <div className="space-y-6">
+      <section className="flex flex-col gap-4 rounded-3xl border bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Recibos</h1>
+          <p className="text-gray-500">
+            Folio consecutivo institucional
+          </p>
         </div>
 
-        {/* TABLA */}
-        {(filtrados ?? []).length === 0 ? (
-          <p className="text-gray-500">
-            No hay movimientos registrados.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b text-gray-500">
-                  <th className="p-3">
-                    Fecha
-                  </th>
-
-                  <th className="p-3">
-                    Alumno
-                  </th>
-
-                  <th className="p-3">
-                    Concepto
-                  </th>
-
-                  <th className="p-3">
-                    Monto
-                  </th>
-
-                  <th className="p-3">
-                    Estado
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {(filtrados ?? []).map(
-                  (p, index) => (
-                    <tr
-                      key={p?.id ?? index}
-                      className="border-b"
-                    >
-                      <td className="p-3">
-                        {p?.pagadoEn
-                          ? new Date(
-                              p.pagadoEn
-                            ).toLocaleDateString(
-                              "es-MX"
-                            )
-                          : "-"}
-                      </td>
-
-                      <td className="p-3 font-medium">
-                        {p?.alumno?.user
-                          ?.name ??
-                          "Alumno no disponible"}
-                      </td>
-
-                      <td className="p-3">
-                        {p?.concepto ??
-                          "Sin concepto"}
-                      </td>
-
-                      <td className="p-3 font-semibold">
-                        {formatMoney(
-                          p?.monto
-                        )}
-                      </td>
-
-                      <td className="p-3">
-                        {p?.pagadoEn ? (
-                          <span className="rounded-full bg-green-100 px-3 py-1 text-sm text-green-700">
-                            Pagado
-                          </span>
-                        ) : (
-                          <span className="rounded-full bg-yellow-100 px-3 py-1 text-sm text-yellow-700">
-                            Pendiente
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <input
+          className="w-full rounded-xl border border-gray-300 px-4 py-2 md:w-72"
+          placeholder="Buscar por folio, nombre o matrícula"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+        />
       </section>
+
+      {error && (
+        <p className="rounded-xl bg-red-50 p-4 text-red-600">{error}</p>
+      )}
+
+      {!error && filtrados.length === 0 && (
+        <div className="rounded-3xl border bg-white p-8 text-center text-gray-500">
+          No hay recibos que mostrar.
+        </div>
+      )}
+
+      {filtrados.length > 0 && (
+        <div className="overflow-x-auto rounded-3xl border bg-white shadow-sm">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50 text-gray-600">
+              <tr>
+                <th className="px-4 py-3">Folio</th>
+                <th className="px-4 py-3">Alumno</th>
+                <th className="px-4 py-3">Conceptos</th>
+                <th className="px-4 py-3">Método</th>
+                <th className="px-4 py-3">Fecha</th>
+                <th className="px-4 py-3">Total</th>
+                <th className="px-4 py-3">Estado</th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {filtrados.map((r) => (
+                <tr key={r.id} className="border-t">
+                  <td className="px-4 py-3 font-semibold">{r.folio}</td>
+
+                  <td className="px-4 py-3">
+                    {r.alumno?.user?.name || "N/A"}
+                    <span className="block text-xs text-gray-400">
+                      {r.alumno?.matricula}
+                    </span>
+                  </td>
+
+                  <td className="px-4 py-3">
+                    {(r.detalles ?? [])
+                      .map((d) => d.concepto?.nombre)
+                      .filter(Boolean)
+                      .join(", ") || "—"}
+                  </td>
+
+                  <td className="px-4 py-3">{r.metodo}</td>
+
+                  <td className="px-4 py-3">
+                    {r.pagadoEn
+                      ? new Date(r.pagadoEn).toLocaleDateString("es-MX")
+                      : "—"}
+                  </td>
+
+                  <td className="px-4 py-3">
+                    ${Number(r.total ?? 0).toFixed(2)}
+                  </td>
+
+                  <td className="px-4 py-3">
+                    <span
+                      className={
+                        r.estado === "CANCELADO"
+                          ? "rounded-full bg-red-100 px-3 py-1 text-xs text-red-700"
+                          : "rounded-full bg-green-100 px-3 py-1 text-xs text-green-700"
+                      }
+                    >
+                      {r.estado === "CANCELADO" ? "Cancelado" : "Pagado"}
+                    </span>
+                  </td>
+
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => setDetalle(r)}
+                        className="rounded-lg border px-3 py-1 text-xs hover:bg-gray-50"
+                      >
+                        Ver
+                      </button>
+
+                      <button
+                        onClick={() => abrirRecibo(r)}
+                        className="rounded-lg border px-3 py-1 text-xs hover:bg-blue-50"
+                      >
+                        Imprimir
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {detalle && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h2 className="text-xl font-bold">Recibo {detalle.folio}</h2>
+
+            <p className="mt-1 text-sm text-gray-500">
+              {detalle.alumno?.user?.name} · {detalle.alumno?.matricula}
+            </p>
+
+            <ul className="mt-4 space-y-2 text-sm">
+              {(detalle.detalles ?? []).map((d, i) => (
+                <li key={i} className="flex justify-between border-b pb-2">
+                  <span>
+                    {d.concepto?.nombre}
+                    {d.cantidad > 1 && ` x${d.cantidad}`}
+                  </span>
+                  <span>${Number(d.monto * d.cantidad).toFixed(2)}</span>
+                </li>
+              ))}
+            </ul>
+
+            <div className="mt-4 flex justify-between font-semibold">
+              <span>Total</span>
+              <span>${Number(detalle.total ?? 0).toFixed(2)}</span>
+            </div>
+
+            <div className="mt-6 flex gap-2">
+              <button
+                onClick={() => abrirRecibo(detalle)}
+                className="flex-1 rounded-xl bg-blue-700 py-2 text-white hover:bg-blue-800"
+              >
+                Imprimir recibo
+              </button>
+
+              <button
+                onClick={() => setDetalle(null)}
+                className="rounded-xl border border-slate-300 px-4 py-2"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

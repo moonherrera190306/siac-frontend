@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { API_URL } from "@/lib/config";
+import { notificar } from "@/lib/notificar";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -12,10 +14,10 @@ export default function LoginPage() {
 
   // 🚀 REDIRECCIÓN AUTOMÁTICA SI YA ESTÁ LOGUEADO
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    const guardado = localStorage.getItem("user");
+    const user = JSON.parse(guardado || "{}");
 
-    if (token && user.role) {
+    if (guardado && user.role) {
       const roleRoutes: any = {
          ADMIN: "/administrador/dashboard",
   ALUMNO: "/alumno/dashboard",
@@ -31,15 +33,18 @@ export default function LoginPage() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      alert("Completa todos los campos");
+      notificar("Completa todos los campos", "alerta");
       return;
     }
 
     try {
       setLoading(true);
 
-      const res = await fetch("http://localhost:4000/api/auth/login", {
+      const res = await fetch(`${API_URL}/api/auth/login`, {
         method: "POST",
+        // 🔐 credentials: "include" es lo que permite al navegador
+        // guardar la cookie httpOnly que devuelve el backend.
+        credentials: "include",
         headers: {
           "Content-Type": "application/json"
         },
@@ -49,13 +54,19 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        alert(data.message || "Error en login");
+        notificar(data.message || "Error en login", "error");
         return;
       }
 
-      // 🔐 Guardar sesión
-      localStorage.setItem("token", data.token);
+      // 🔐 El token NO se guarda: viene en una cookie httpOnly.
+      // Aquí solo queda el perfil, que no es una credencial.
       localStorage.setItem("user", JSON.stringify(data.user));
+
+      // Primer acceso: hay que cambiar la contraseña antes de entrar.
+      if (data.user.debeCambiarPassword) {
+        router.push("/cambiar-password");
+        return;
+      }
 
     const roleRoutes: any = {
   ADMIN: "/administrador/dashboard",
@@ -70,7 +81,7 @@ export default function LoginPage() {
 
     } catch (error) {
       console.error(error);
-      alert("Error de conexión con el servidor");
+      notificar("Error de conexión con el servidor", "error");
     } finally {
       setLoading(false);
     }

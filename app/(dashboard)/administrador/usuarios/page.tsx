@@ -1,117 +1,222 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/apiClient";
+import { API_URL } from "@/lib/config";
+import { notificar } from "@/lib/notificar";
+import { PageHeader, Card, TableWrap, Badge, Button, Vacio, Modal } from "@/components/ui";
 
-type Usuario = {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  activo?: boolean;
-};
+const ROLES_STAFF = ["ADMIN", "DIRECTOR", "SECRETARIA", "CAJA"];
 
 export default function AdministradorUsuariosPage() {
-  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [usuarios, setUsuarios] = useState<any[]>([]);
+  const [busqueda, setBusqueda] = useState("");
+
+  const [abierto, setAbierto] = useState(false);
+  const [nuevo, setNuevo] = useState({ name: "", email: "", role: "SECRETARIA" });
+  const [guardando, setGuardando] = useState(false);
+
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+
+  const cargar = async () => {
+    try {
+      setLoading(true);
+
+      const res = await fetch(`${API_URL}/api/admin/usuarios`, {
+        credentials: "include",
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json?.message || "Error al cargar usuarios");
+
+      setUsuarios(Array.isArray(json) ? json : json?.data ?? []);
+    } catch (e: any) {
+      notificar(e.message || "Error al cargar usuarios", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function cargarUsuarios() {
-      try {
-        setLoading(true);
-        setError("");
-
-        const data = await apiFetch("/api/admin/usuarios");
-
-        const listaUsuarios = Array.isArray(data)
-          ? data
-          : Array.isArray(data?.usuarios)
-          ? data.usuarios
-          : Array.isArray(data?.data)
-          ? data.data
-          : [];
-
-        setUsuarios(listaUsuarios);
-      } catch (err: any) {
-        console.error("Error cargando usuarios:", err);
-        setError(err.message || "Error cargando usuarios");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    cargarUsuarios();
+    cargar();
   }, []);
 
-  if (loading) {
-    return <p className="p-6">Cargando usuarios...</p>;
-  }
+  const crear = async () => {
+    if (!nuevo.name || !nuevo.email) {
+      notificar("El nombre y el correo son requeridos", "alerta");
+      return;
+    }
 
-  if (error) {
-    return (
-      <div className="p-6">
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
-          {error}
-        </div>
-      </div>
+    setGuardando(true);
+
+    const res = await fetch(`${API_URL}/api/admin/usuarios`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(nuevo),
+    });
+
+    const json = await res.json();
+
+    setGuardando(false);
+
+    if (!res.ok) {
+      notificar(json?.message || "No se pudo crear el usuario", "error");
+      return;
+    }
+
+    // La contraseña temporal solo se muestra una vez.
+    notificar(
+      `Usuario creado. Contraseña temporal: ${json.passwordTemporal}`,
+      "exito",
+      15000
     );
-  }
+
+    setNuevo({ name: "", email: "", role: "SECRETARIA" });
+    setAbierto(false);
+    cargar();
+  };
+
+  const cambiarEstado = async (u: any) => {
+    const res = await fetch(`${API_URL}/api/admin/usuarios/${u.id}/estado`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activo: !u.activo }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      notificar(json?.message || "No se pudo cambiar el estado", "error");
+      return;
+    }
+
+    notificar(u.activo ? "Usuario desactivado" : "Usuario activado", "exito");
+    cargar();
+  };
+
+  const filtrados = usuarios.filter((u) => {
+    const t = busqueda.trim().toLowerCase();
+    if (!t) return true;
+    return (
+      (u.name || "").toLowerCase().includes(t) ||
+      (u.email || "").toLowerCase().includes(t) ||
+      (u.role || "").toLowerCase().includes(t)
+    );
+  });
+
+  if (loading) return <p className="p-2 text-slate-500">Cargando...</p>;
 
   return (
-    <div className="space-y-6">
-      <section className="flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800">Usuarios</h1>
-          <p className="mt-2 text-gray-600">
-            Administra los accesos y roles del sistema.
-          </p>
-        </div>
+    <>
+      <PageHeader
+        titulo="Usuarios"
+        descripcion={`${usuarios.length} cuentas · administra los accesos y roles del sistema`}
+      >
+        <Button onClick={() => setAbierto(true)}>Nuevo usuario</Button>
+      </PageHeader>
 
-        <button className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white">
-          Nuevo usuario
-        </button>
-      </section>
+      <Card>
+        <input
+          className="w-full rounded-xl border border-slate-300 px-4 py-2"
+          placeholder="Buscar por nombre, correo o rol"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+        />
+      </Card>
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-        {usuarios.length === 0 ? (
-          <p className="text-gray-500">No hay usuarios registrados.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b text-sm text-gray-500">
-                  <th className="py-3">Nombre</th>
-                  <th className="py-3">Correo</th>
-                  <th className="py-3">Rol</th>
-                  <th className="py-3">Estado</th>
+      {filtrados.length === 0 ? (
+        <Vacio titulo="No hay usuarios con ese filtro." />
+      ) : (
+        <TableWrap>
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-slate-600">
+              <tr>
+                <th className="px-4 py-3">Nombre</th>
+                <th className="px-4 py-3">Correo</th>
+                <th className="px-4 py-3">Rol</th>
+                <th className="px-4 py-3">Estado</th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {filtrados.map((u) => (
+                <tr key={u.id} className="border-t border-slate-100">
+                  <td className="px-4 py-3 font-medium">{u.name}</td>
+                  <td className="px-4 py-3 text-slate-600">{u.email}</td>
+                  <td className="px-4 py-3">{u.role}</td>
+
+                  <td className="px-4 py-3">
+                    <Badge tono={u.activo ? "bien" : "neutro"}>
+                      {u.activo ? "Activo" : "Inactivo"}
+                    </Badge>
+                  </td>
+
+                  <td className="px-4 py-3">
+                    <Button
+                      variante="secundario"
+                      onClick={() => cambiarEstado(u)}
+                    >
+                      {u.activo ? "Desactivar" : "Activar"}
+                    </Button>
+                  </td>
                 </tr>
-              </thead>
+              ))}
+            </tbody>
+          </table>
+        </TableWrap>
+      )}
 
-              <tbody>
-                {(usuarios ?? []).map((u) => (
-                  <tr key={u.id} className="border-b">
-                    <td className="py-3">{u.name ?? "Sin nombre"}</td>
-                    <td className="py-3">{u.email ?? "Sin correo"}</td>
-                    <td className="py-3">{u.role ?? "Sin rol"}</td>
-                    <td className="py-3">
-                      <span
-                        className={`rounded-full px-3 py-1 text-sm ${
-                          u.activo ?? true
-                            ? "bg-green-100 text-green-700"
-                            : "bg-red-100 text-red-700"
-                        }`}
-                      >
-                        {u.activo ?? true ? "Activo" : "Inactivo"}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {abierto && (
+        <Modal titulo="Nuevo usuario" onClose={() => setAbierto(false)}>
+          <div className="space-y-3">
+            <input
+              className="w-full rounded-xl border border-slate-300 px-4 py-2"
+              placeholder="Nombre completo"
+              value={nuevo.name}
+              onChange={(e) => setNuevo({ ...nuevo, name: e.target.value })}
+            />
+
+            <input
+              type="email"
+              className="w-full rounded-xl border border-slate-300 px-4 py-2"
+              placeholder="correo@ceszam.mx"
+              value={nuevo.email}
+              onChange={(e) => setNuevo({ ...nuevo, email: e.target.value })}
+            />
+
+            <select
+              className="w-full rounded-xl border border-slate-300 px-4 py-2"
+              value={nuevo.role}
+              onChange={(e) => setNuevo({ ...nuevo, role: e.target.value })}
+            >
+              {ROLES_STAFF.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+
+            <p className="text-xs text-slate-500">
+              Los alumnos se dan de alta en Alumnos y los maestros en Maestros:
+              ahí se crea también su registro académico. La contraseña se genera
+              sola y el usuario debe cambiarla al entrar.
+            </p>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variante="secundario" onClick={() => setAbierto(false)}>
+                Cancelar
+              </Button>
+
+              <Button onClick={crear} disabled={guardando}>
+                {guardando ? "Creando..." : "Crear usuario"}
+              </Button>
+            </div>
           </div>
-        )}
-      </section>
-    </div>
+        </Modal>
+      )}
+    </>
   );
 }

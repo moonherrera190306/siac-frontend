@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
 
 export default function DashboardLayout({
   children,
@@ -14,20 +15,49 @@ export default function DashboardLayout({
 
   const [user, setUser] = useState<any>(null);
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
+  // 📱 El sidebar era `w-72` fijo: en móvil ocupaba espacio permanente
+  // y no había forma de cerrarlo.
+  const [menuAbierto, setMenuAbierto] = useState(false);
 
-    if (!token) {
+  useEffect(() => {
+    // 🔐 El token vive en una cookie httpOnly: no se puede leer desde aquí.
+    // La sesión se confirma contra el backend.
+    const guardado = localStorage.getItem("user");
+
+    if (!guardado) {
       router.push("/login");
       return;
     }
 
-    const storedUser = JSON.parse(
-      localStorage.getItem("user") || "{}"
-    );
+    setUser(JSON.parse(guardado));
 
-    setUser(storedUser);
-  }, []);
+    fetch(`${API_URL}/api/auth/me`, { credentials: "include" })
+      .then((res) => {
+        if (!res.ok) throw new Error("Sesión no válida");
+        return res.json();
+      })
+      .then((data) => {
+        localStorage.setItem("user", JSON.stringify(data.user));
+        setUser(data.user);
+
+        // Evita el bucle: si ya está en la pantalla, no se redirige.
+        if (
+          data.user?.debeCambiarPassword &&
+          pathname !== "/cambiar-password"
+        ) {
+          router.push("/cambiar-password");
+        }
+      })
+      .catch(() => {
+        localStorage.removeItem("user");
+        router.push("/login");
+      });
+  }, [pathname]);
+
+  // Al cambiar de pantalla en móvil, el menú se cierra solo.
+  useEffect(() => {
+    setMenuAbierto(false);
+  }, [pathname]);
 
   const roleMenu: any = {
     ADMIN: [
@@ -35,6 +65,32 @@ export default function DashboardLayout({
         label: "Dashboard",
         path: "/administrador/dashboard",
       },
+      {
+        label: "Usuarios",
+        path: "/administrador/usuarios",
+      },
+      {
+        label: "Alumnos",
+        path: "/administrador/alumnos",
+      },
+      {
+        label: "Materias",
+        path: "/administrador/materias",
+      },
+      {
+        label: "Pagos",
+        path: "/administrador/pagos",
+      },
+      {
+        label: "Reportes",
+        path: "/administrador/reportes",
+      },
+      {
+        label: "Auditoría",
+        path: "/administrador/auditoria",
+      },
+      // Pendientes: /administrador/grupos y /administrador/maestros no se
+      // enlazan todavía porque no consumen datos reales del backend.
     ],
 
     MAESTRO: [
@@ -135,6 +191,26 @@ export default function DashboardLayout({
     path: "/director/materias",
   },
   {
+    label: "Horarios",
+    path: "/director/horarios",
+  },
+  {
+    label: "Evaluación",
+    path: "/director/evaluacion",
+  },
+  {
+    label: "Seguimiento",
+    path: "/director/bitacora",
+  },
+  {
+    label: "Observaciones",
+    path: "/director/observaciones",
+  },
+  {
+    label: "Estructura",
+    path: "/director/estructura",
+  },
+  {
     label: "Ciclos",
     path: "/director/ciclos",
   },
@@ -178,6 +254,10 @@ export default function DashboardLayout({
   },
 
   {
+    label: "Trámites",
+    path: "/secretaria/tramites",
+  },
+  {
     label: "Documentos",
     path: "/secretaria/documentos",
   },
@@ -219,75 +299,126 @@ export default function DashboardLayout({
   const menu =
     roleMenu[user?.role] || [];
 
-  const logout = () => {
-    localStorage.removeItem("token");
+  const logout = async () => {
+    // 🔐 La cookie httpOnly solo la puede borrar el backend.
+    try {
+      await fetch(`${API_URL}/api/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {
+      // aunque falle la red, se cierra la sesión del lado del cliente
+    }
+
     localStorage.removeItem("user");
 
     router.push("/login");
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-slate-100">
 
-      {/* SIDEBAR */}
-      <aside className="w-72 bg-slate-950 text-white flex flex-col">
+      {/* ================= BARRA MÓVIL ================= */}
+      <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 md:hidden">
+        <button
+          onClick={() => setMenuAbierto(true)}
+          aria-label="Abrir menú"
+          className="rounded-lg border border-slate-300 px-3 py-1.5 text-lg leading-none text-slate-700"
+        >
+          ☰
+        </button>
 
-        {/* HEADER */}
-        <div className="p-6 border-b border-slate-800">
-          <h1 className="text-4xl font-bold">
-            SIAC
-          </h1>
+        <span className="text-lg font-bold text-slate-900">SIAC</span>
+
+        <span className="ml-auto text-xs font-medium text-slate-500">
+          {user?.role}
+        </span>
+      </header>
+
+      {/* ================= FONDO OSCURO (solo móvil) ================= */}
+      {menuAbierto && (
+        <div
+          onClick={() => setMenuAbierto(false)}
+          className="fixed inset-0 z-40 bg-slate-900/50 md:hidden"
+          role="presentation"
+        />
+      )}
+
+      {/* ================= SIDEBAR =================
+          Fijo en todos los tamaños. En escritorio siempre visible;
+          en móvil entra deslizándose. El contenido se recorre con
+          margen, no con flex: así no hay forma de que se encimen. */}
+      <aside
+        className={
+          "fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-slate-900 text-white transition-transform duration-200 md:translate-x-0 " +
+          (menuAbierto ? "translate-x-0" : "-translate-x-full")
+        }
+      >
+        {/* MARCA */}
+        <div className="flex items-center justify-between border-b border-slate-800 px-5 py-5">
+          <div>
+            <p className="text-2xl font-bold tracking-tight">SIAC</p>
+            <p className="text-[11px] text-slate-400">
+              Sistema Integral Académico
+            </p>
+          </div>
+
+          <button
+            onClick={() => setMenuAbierto(false)}
+            aria-label="Cerrar menú"
+            className="text-2xl leading-none text-slate-400 md:hidden"
+          >
+            ×
+          </button>
         </div>
 
-        {/* USER */}
-        <div className="p-6 border-b border-slate-800">
-          <p className="font-semibold">
+        {/* USUARIO */}
+        <div className="border-b border-slate-800 px-5 py-4">
+          <p className="truncate text-sm font-semibold">
             {user?.name || "Usuario"}
           </p>
 
-          <p className="text-slate-400 text-sm">
-            {user?.role}
-          </p>
+          <p className="text-xs text-slate-400">{user?.role}</p>
         </div>
 
-        {/* MENU */}
-        <nav className="flex-1 p-4 space-y-2">
+        {/* MENÚ */}
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+          {menu.map((item: any) => {
+            const activo = pathname === item.path;
 
-          {menu.map((item: any) => (
-            <Link
-              key={item.path}
-              href={item.path}
-              className={`block rounded-xl px-4 py-3 transition ${
-                pathname === item.path
-                  ? "bg-blue-600"
-                  : "hover:bg-slate-800"
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
-
+            return (
+              <Link
+                key={item.path}
+                href={item.path}
+                className={
+                  "block rounded-lg px-3 py-2 text-sm transition " +
+                  (activo
+                    ? "bg-blue-600 font-medium text-white"
+                    : "text-slate-300 hover:bg-slate-800 hover:text-white")
+                }
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
 
-        {/* FOOTER */}
-        <div className="p-4 border-t border-slate-800">
-
+        {/* SALIR */}
+        <div className="border-t border-slate-800 p-3">
           <button
             onClick={logout}
-            className="w-full rounded-xl bg-red-500 px-4 py-3 font-medium hover:bg-red-600"
+            className="w-full rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
           >
             Cerrar sesión
           </button>
-
         </div>
-
       </aside>
 
-      {/* CONTENT */}
-      <main className="flex-1 p-6">
-        {children}
+      {/* ================= CONTENIDO =================
+          `md:ml-64` deja exactamente el ancho del sidebar libre. */}
+      <main className="min-w-0 p-4 md:ml-64 md:p-8">
+        <div className="mx-auto max-w-7xl space-y-6">{children}</div>
       </main>
-
     </div>
   );
 }

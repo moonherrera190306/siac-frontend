@@ -1,158 +1,139 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
 
-type Reporte = {
-  key: string;
-  titulo: string;
-  descripcion: string;
-};
+function hoy() {
+  const d = new Date();
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mes}-${dia}`;
+}
 
 export default function CajaReportesPage() {
-  const [loading, setLoading] = useState("");
-  const [resultado, setResultado] = useState<any>(null);
+  const [fecha, setFecha] = useState(hoy());
+  const [corte, setCorte] = useState<any>(null);
+
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  async function generar(tipo: string) {
+  const cargar = async (dia: string) => {
     try {
-      setLoading(tipo);
+      setLoading(true);
+
+      // 🔥 Antes esta pantalla mostraba JSON crudo dentro de un <pre>.
+      const res = await fetch(`${API_URL}/api/pagos/corte/dia?fecha=${dia}`, {
+        credentials: "include",
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json?.message || "Error al generar el corte");
+
+      setCorte(json?.data ?? null);
       setError("");
-      setResultado(null);
-
-      const token = localStorage.getItem("token");
-
-      const res = await fetch(
-        `http://localhost:4000/api/reportes/${tipo}`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const response = await res.json();
-
-      if (!res.ok) {
-        throw new Error(
-          response?.message ||
-            "Error generando reporte"
-        );
-      }
-
-      const data = response?.data || response;
-
-      setResultado(data);
-
-      alert(
-        `Reporte ${tipo} generado correctamente`
-      );
-
-      console.log("REPORTE:", data);
-    } catch (err: any) {
-      console.error(err);
-
-      setError(
-        err?.message ||
-          "Error al generar reporte"
-      );
+    } catch (e: any) {
+      setError(e.message || "Error al generar el corte");
+      setCorte(null);
     } finally {
-      setLoading("");
+      setLoading(false);
     }
-  }
+  };
 
-  const reportes: Reporte[] = [
-    {
-      key: "pagos",
-      titulo: "Reporte diario de caja",
-      descripcion:
-        "Resumen de ingresos y pagos registrados.",
-    },
+  useEffect(() => {
+    cargar(fecha);
+  }, []);
 
-    {
-      key: "pendientes",
-      titulo: "Reporte de pagos pendientes",
-      descripcion:
-        "Consulta alumnos con adeudos activos.",
-    },
-
-    {
-      key: "recibos",
-      titulo: "Reporte de recibos emitidos",
-      descripcion:
-        "Historial de recibos generados.",
-    },
-
-    {
-      key: "metodos",
-      titulo: "Reporte por método de pago",
-      descripcion:
-        "Distribución de pagos registrados.",
-    },
-  ];
+  const conceptos = Object.entries(corte?.porConcepto ?? {});
 
   return (
-    <div className="space-y-6 p-6">
-      <section className="rounded-2xl bg-white p-6 shadow">
-        <h1 className="text-3xl font-bold">
-          Reportes
-        </h1>
+    <div className="space-y-6">
+      <section className="flex flex-col gap-4 rounded-3xl border bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Corte de caja</h1>
+          <p className="text-gray-500">
+            Un cajero ve solo sus propios cobros; dirección ve todos.
+          </p>
+        </div>
 
-        <p className="text-gray-500">
-          Genera reportes del módulo de caja
-        </p>
+        <input
+          type="date"
+          value={fecha}
+          onChange={(e) => {
+            setFecha(e.target.value);
+            cargar(e.target.value);
+          }}
+          className="rounded-xl border border-gray-300 px-4 py-2"
+        />
       </section>
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
-          {error}
-        </div>
+        <p className="rounded-xl bg-red-50 p-4 text-red-600">{error}</p>
       )}
 
-      <section className="grid gap-4 md:grid-cols-2">
-        {(reportes ?? []).map((r) => (
-          <div
-            key={r.key}
-            className="rounded-2xl bg-white p-6 shadow"
-          >
-            <h2 className="text-xl font-semibold">
-              {r.titulo}
+      {loading && <p className="text-gray-500">Generando corte...</p>}
+
+      {corte && !loading && (
+        <>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-3xl border bg-white p-6 shadow-sm">
+              <p className="text-sm text-gray-500">Recibos emitidos</p>
+              <h2 className="text-3xl font-bold">{corte.recibos}</h2>
+            </div>
+
+            <div className="rounded-3xl border-2 border-green-500 bg-green-50 p-6">
+              <p className="text-sm text-green-700">Total del día</p>
+              <h2 className="text-3xl font-bold text-green-800">
+                ${Number(corte.total ?? 0).toFixed(2)}
+              </h2>
+            </div>
+          </div>
+
+          <section className="rounded-3xl border bg-white shadow-sm">
+            <h2 className="border-b px-5 py-4 text-lg font-semibold">
+              Desglose por concepto
             </h2>
 
-            <p className="mt-2 text-gray-500">
-              {r.descripcion}
-            </p>
+            {conceptos.length === 0 ? (
+              <p className="p-6 text-center text-gray-500">
+                No hubo cobros en esta fecha.
+              </p>
+            ) : (
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-50 text-gray-600">
+                  <tr>
+                    <th className="px-4 py-3">Concepto</th>
+                    <th className="px-4 py-3 text-right">Importe</th>
+                    <th className="px-4 py-3 text-right">%</th>
+                  </tr>
+                </thead>
 
-            <button
-              onClick={() => generar(r.key)}
-              disabled={loading === r.key}
-              className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {loading === r.key
-                ? "Generando..."
-                : "Generar reporte"}
-            </button>
-          </div>
-        ))}
-      </section>
+                <tbody>
+                  {conceptos.map(([clave, monto]: any) => (
+                    <tr key={clave} className="border-t">
+                      <td className="px-4 py-3">{clave}</td>
 
-      {resultado && (
-        <section className="rounded-2xl bg-white p-6 shadow">
-          <h2 className="mb-4 text-2xl font-bold">
-            Resultado del reporte
-          </h2>
+                      <td className="px-4 py-3 text-right">
+                        ${Number(monto).toFixed(2)}
+                      </td>
 
-          <div className="overflow-auto rounded-xl bg-slate-950 p-4 text-sm text-green-400">
-            <pre>
-              {JSON.stringify(
-                resultado,
-                null,
-                2
-              )}
-            </pre>
-          </div>
-        </section>
+                      <td className="px-4 py-3 text-right text-gray-500">
+                        {corte.total > 0
+                          ? ((Number(monto) / corte.total) * 100).toFixed(1)
+                          : "0.0"}
+                        %
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+
+          <p className="text-xs text-gray-400">
+            Los recibos cancelados no se cuentan en el corte.
+          </p>
+        </>
       )}
     </div>
   );

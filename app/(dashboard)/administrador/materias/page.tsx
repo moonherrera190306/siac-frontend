@@ -1,148 +1,302 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
+import { notificar } from "@/lib/notificar";
+import { PageHeader, Card, TableWrap, Badge, Button, Vacio, Modal } from "@/components/ui";
+
+const TIPOS = ["OBLIGATORIA", "COMPLEMENTARIA", "EXTRACURRICULAR"];
+const EVALUACIONES = ["NUMERICA", "ACREDITACION"];
+
+const VACIA = {
+  id: "",
+  nombre: "",
+  clave: "",
+  tipo: "OBLIGATORIA",
+  tipoEvaluacion: "NUMERICA",
+  creditos: "",
+  horasSemana: "",
+  semestreId: "",
+};
 
 export default function AdministradorMateriasPage() {
   const [materias, setMaterias] = useState<any[]>([]);
+  const [semestres, setSemestres] = useState<any[]>([]);
+  const [busqueda, setBusqueda] = useState("");
+
+  const [form, setForm] = useState<any>(VACIA);
+  const [abierto, setAbierto] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+
   const [loading, setLoading] = useState(true);
 
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("token")
-      : null;
+  const cargar = async () => {
+    try {
+      setLoading(true);
+
+      const [rm, rs] = await Promise.all([
+        fetch(`${API_URL}/api/materias`, { credentials: "include" }),
+        fetch(`${API_URL}/api/semestres`, { credentials: "include" }),
+      ]);
+
+      const [jm, js] = await Promise.all([rm.json(), rs.json()]);
+
+      if (!rm.ok) throw new Error(jm?.message || "Error al cargar materias");
+
+      setMaterias(Array.isArray(jm) ? jm : jm?.data ?? []);
+      setSemestres(Array.isArray(js) ? js : js?.data ?? []);
+    } catch (e: any) {
+      notificar(e.message || "Error al cargar materias", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (!token) {
-      window.location.href = "/login";
+    cargar();
+  }, []);
+
+  const abrirNueva = () => {
+    setForm(VACIA);
+    setAbierto(true);
+  };
+
+  const abrirEdicion = (m: any) => {
+    setForm({
+      id: m.id,
+      nombre: m.nombre ?? "",
+      clave: m.clave ?? "",
+      tipo: m.tipo ?? "OBLIGATORIA",
+      tipoEvaluacion: m.tipoEvaluacion ?? "NUMERICA",
+      creditos: m.creditos ?? "",
+      horasSemana: m.horasSemana ?? "",
+      semestreId: m.semestreId ?? "",
+    });
+
+    setAbierto(true);
+  };
+
+  const guardar = async () => {
+    if (!form.nombre.trim()) {
+      notificar("El nombre es requerido", "alerta");
       return;
     }
 
-    const fetchData = async () => {
-      try {
-        // 🔥 TRAER MATERIAS
-        const res = await fetch(
-          "http://localhost:4000/api/materias",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+    setGuardando(true);
 
-        const data = await res.json();
+    const editando = Boolean(form.id);
 
-        // 🔥 FORMATEAR DATA
-        const formateadas = data.map((m: any) => ({
-          id: m.id,
-          nombre: m.nombre,
-          semestre:
-            m.grupo?.semestre?.nombre || "Sin semestre",
-          docente:
-            m.docente?.user?.name || "Sin docente",
-          estado: "Activa",
-        }));
-
-        setMaterias(formateadas);
-
-      } catch (error) {
-        console.error(error);
-        alert("Error cargando materias");
-      } finally {
-        setLoading(false);
+    const res = await fetch(
+      `${API_URL}/api/materias${editando ? `/${form.id}` : ""}`,
+      {
+        method: editando ? "PUT" : "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre: form.nombre,
+          clave: form.clave || null,
+          tipo: form.tipo,
+          tipoEvaluacion: form.tipoEvaluacion,
+          creditos: form.creditos || null,
+          horasSemana: form.horasSemana || null,
+          semestreId: form.semestreId || null,
+        }),
       }
-    };
+    );
 
-    fetchData();
-  }, []);
+    const json = await res.json();
 
-  if (loading) return <p className="p-6">Cargando...</p>;
+    setGuardando(false);
+
+    if (!res.ok) {
+      notificar(json?.message || "No se pudo guardar", "error");
+      return;
+    }
+
+    notificar(editando ? "Materia actualizada" : "Materia creada", "exito");
+    setAbierto(false);
+    cargar();
+  };
+
+  const filtradas = materias.filter((m) => {
+    const t = busqueda.trim().toLowerCase();
+    if (!t) return true;
+    return (
+      (m.nombre || "").toLowerCase().includes(t) ||
+      (m.clave || "").toLowerCase().includes(t)
+    );
+  });
+
+  if (loading) return <p className="p-2 text-slate-500">Cargando...</p>;
 
   return (
-    <div className="space-y-6">
+    <>
+      <PageHeader
+        titulo="Materias"
+        descripcion={`${materias.length} materias del plan de estudios`}
+      >
+        <Button onClick={abrirNueva}>Nueva materia</Button>
+      </PageHeader>
 
-      {/* HEADER */}
-      <section className="flex flex-col gap-4 rounded-2xl border bg-white p-6 shadow-sm md:flex-row md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">
-            Materias
-          </h1>
-          <p className="text-gray-500">
-            Catálogo académico
-          </p>
-        </div>
+      <Card>
+        <input
+          className="w-full rounded-xl border border-slate-300 px-4 py-2"
+          placeholder="Buscar por nombre o clave del plan"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+        />
+      </Card>
 
-        <button
-          onClick={() => alert("Crear materia")}
-          className="bg-slate-900 text-white px-4 py-2 rounded-xl"
-        >
-          Nueva materia
-        </button>
-      </section>
-
-      {/* TABLA */}
-      <section className="bg-white p-6 rounded-2xl shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-
-            <thead>
-              <tr className="border-b text-gray-500">
-                <th className="py-3">Materia</th>
-                <th>Semestre</th>
-                <th>Docente</th>
-                <th>Estado</th>
-                <th>Acciones</th>
+      {filtradas.length === 0 ? (
+        <Vacio titulo="No hay materias registradas." />
+      ) : (
+        <TableWrap>
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-slate-600">
+              <tr>
+                <th className="px-4 py-3">Clave</th>
+                <th className="px-4 py-3">Materia</th>
+                <th className="px-4 py-3">Semestre</th>
+                <th className="px-4 py-3">Tipo</th>
+                <th className="px-4 py-3">Evaluación</th>
+                <th className="px-4 py-3">Créditos</th>
+                <th className="px-4 py-3"></th>
               </tr>
             </thead>
 
             <tbody>
-              {materias.map((m) => (
-                <tr key={m.id} className="border-b">
+              {filtradas.map((m) => (
+                <tr key={m.id} className="border-t border-slate-100">
+                  <td className="px-4 py-3 text-slate-500">{m.clave || "—"}</td>
 
-                  <td className="py-4 font-medium">
-                    {m.nombre}
+                  <td className="px-4 py-3 font-medium">{m.nombre}</td>
+
+                  <td className="px-4 py-3">{m.semestre?.nombre ?? "—"}</td>
+
+                  <td className="px-4 py-3">
+                    <Badge tono={m.tipo === "OBLIGATORIA" ? "info" : "neutro"}>
+                      {m.tipo}
+                    </Badge>
                   </td>
 
-                  <td>{m.semestre}</td>
-
-                  <td>{m.docente}</td>
-
-                  <td>
-                    <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm">
-                      {m.estado}
-                    </span>
+                  <td className="px-4 py-3">
+                    {m.tipoEvaluacion === "ACREDITACION" ? "AC / NA" : "1 - 10"}
                   </td>
 
-                  <td>
-                    <div className="flex gap-2">
+                  <td className="px-4 py-3">{m.creditos ?? "—"}</td>
 
-                      <button
-                        onClick={() =>
-                          alert(JSON.stringify(m, null, 2))
-                        }
-                        className="bg-gray-100 px-3 py-1 rounded"
-                      >
-                        Ver
-                      </button>
-
-                      <button
-                        onClick={() =>
-                          alert("Editar materia")
-                        }
-                        className="bg-gray-100 px-3 py-1 rounded"
-                      >
-                        Editar
-                      </button>
-
-                    </div>
+                  <td className="px-4 py-3">
+                    <Button
+                      variante="secundario"
+                      onClick={() => abrirEdicion(m)}
+                    >
+                      Editar
+                    </Button>
                   </td>
-
                 </tr>
               ))}
             </tbody>
-
           </table>
-        </div>
-      </section>
-    </div>
+        </TableWrap>
+      )}
+
+      {abierto && (
+        <Modal
+          titulo={form.id ? "Editar materia" : "Nueva materia"}
+          onClose={() => setAbierto(false)}
+        >
+          <div className="grid gap-3 md:grid-cols-2">
+            <input
+              className="rounded-xl border border-slate-300 px-4 py-2 md:col-span-2"
+              placeholder="Nombre de la materia"
+              value={form.nombre}
+              onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+            />
+
+            <input
+              className="rounded-xl border border-slate-300 px-4 py-2"
+              placeholder="Clave del plan (100155)"
+              value={form.clave}
+              onChange={(e) => setForm({ ...form, clave: e.target.value })}
+            />
+
+            <select
+              className="rounded-xl border border-slate-300 px-4 py-2"
+              value={form.semestreId}
+              onChange={(e) => setForm({ ...form, semestreId: e.target.value })}
+            >
+              <option value="">Semestre...</option>
+
+              {semestres.map((s: any) => (
+                <option key={s.id} value={s.id}>
+                  {s.nombre}
+                  {s.carrera?.nombre ? ` — ${s.carrera.nombre}` : ""}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="rounded-xl border border-slate-300 px-4 py-2"
+              value={form.tipo}
+              onChange={(e) => setForm({ ...form, tipo: e.target.value })}
+            >
+              {TIPOS.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="rounded-xl border border-slate-300 px-4 py-2"
+              value={form.tipoEvaluacion}
+              onChange={(e) =>
+                setForm({ ...form, tipoEvaluacion: e.target.value })
+              }
+            >
+              {EVALUACIONES.map((t) => (
+                <option key={t} value={t}>
+                  {t === "ACREDITACION" ? "Acreditación (AC/NA)" : "Numérica (1-10)"}
+                </option>
+              ))}
+            </select>
+
+            <input
+              type="number"
+              className="rounded-xl border border-slate-300 px-4 py-2"
+              placeholder="Créditos"
+              value={form.creditos}
+              onChange={(e) => setForm({ ...form, creditos: e.target.value })}
+            />
+
+            <input
+              type="number"
+              className="rounded-xl border border-slate-300 px-4 py-2"
+              placeholder="Horas por semana"
+              value={form.horasSemana}
+              onChange={(e) => setForm({ ...form, horasSemana: e.target.value })}
+            />
+          </div>
+
+          {form.id && (
+            <p className="mt-3 text-xs text-slate-500">
+              El tipo de evaluación no se puede cambiar si la materia ya tiene
+              calificaciones capturadas: un 8 no significa nada en una materia
+              que solo acepta AC/NA.
+            </p>
+          )}
+
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variante="secundario" onClick={() => setAbierto(false)}>
+              Cancelar
+            </Button>
+
+            <Button onClick={guardar} disabled={guardando}>
+              {guardando ? "Guardando..." : "Guardar"}
+            </Button>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
