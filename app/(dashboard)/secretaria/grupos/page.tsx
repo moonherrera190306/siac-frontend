@@ -3,14 +3,21 @@
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/config";
 
+// `nivel` y `turno` dejaron de ser texto suelto: hoy son relaciones,
+// y el nivel se consulta a través del semestre y su carrera.
 type Grupo = {
   id?: string;
 
   nombre?: string;
 
-  nivel?: string;
+  turno?: { nombre?: string | null } | null;
 
-  turno?: string;
+  semestre?: {
+    nombre?: string | null;
+    carrera?: { nombre?: string | null } | null;
+  } | null;
+
+  _count?: { alumnos?: number } | null;
 
   alumnos?: any[];
 
@@ -43,13 +50,7 @@ export default function SecretariaGruposPage() {
         setLoading(true);
         setError("");
 
-        // 🔐 El token vive en una cookie httpOnly y no se puede leer desde aquí.
-  // Solo se comprueba que exista una sesión guardada.
-  const sesion =
-    typeof window !== "undefined"
-      ? localStorage.getItem("user")
-      : null;
-
+        // 🔐 El token vive en una cookie httpOnly: basta con `credentials`.
         const res = await fetch(
           `${API_URL}/api/grupos`,
           {

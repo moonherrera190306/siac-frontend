@@ -4,8 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/apiClient";
 
 type Actividad = {
-  concepto?: string;
-  monto?: number;
+  // `concepto` y `monto` ya no viven en Pago: los conceptos están en
+  // `detalles` y el importe es `total`.
+  total?: number;
+  detalles?: { concepto?: { nombre?: string | null } | null }[];
   alumno?: {
     user?: {
       name?: string;
