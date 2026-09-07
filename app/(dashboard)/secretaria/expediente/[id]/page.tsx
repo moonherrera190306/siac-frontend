@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { API_URL } from "@/lib/config";
+import { abrirConstanciaCalificaciones } from "@/lib/documentos";
 
 const COLOR_DOC: Record<string, string> = {
   VALIDADO: "bg-green-100 text-green-700",
@@ -28,13 +29,15 @@ export default function ExpedientePage() {
   const [error, setError] = useState("");
   const [aviso, setAviso] = useState("");
 
+  const [calificaciones, setCalificaciones] = useState<any[]>([]);
+
   const [nuevoDoc, setNuevoDoc] = useState({ nombre: "", tipo: "", url: "" });
 
   const cargar = async () => {
     try {
       setLoading(true);
 
-      const [ra, ri, rd] = await Promise.all([
+      const [ra, ri, rd, rc] = await Promise.all([
         fetch(`${API_URL}/api/alumnos/${alumnoId}`, { credentials: "include" }),
         fetch(`${API_URL}/api/inscripciones/alumno/${alumnoId}`, {
           credentials: "include",
@@ -42,15 +45,25 @@ export default function ExpedientePage() {
         fetch(`${API_URL}/api/documentos?alumnoId=${alumnoId}&perPage=100`, {
           credentials: "include",
         }),
+        // El kardex completo, para poder imprimirlo membretado.
+        fetch(`${API_URL}/api/calificaciones/alumno/${alumnoId}`, {
+          credentials: "include",
+        }),
       ]);
 
-      const [ja, ji, jd] = await Promise.all([ra.json(), ri.json(), rd.json()]);
+      const [ja, ji, jd, jc] = await Promise.all([
+        ra.json(),
+        ri.json(),
+        rd.json(),
+        rc.json(),
+      ]);
 
       if (!ra.ok) throw new Error(ja?.message || "Error al cargar el alumno");
 
       setAlumno(ja?.data ?? null);
       setInscripciones(ji?.data ?? []);
       setDocumentos(jd?.data ?? []);
+      setCalificaciones(jc?.data ?? []);
       setError("");
     } catch (e: any) {
       setError(e.message || "Error al cargar el expediente");
@@ -143,6 +156,21 @@ export default function ExpedientePage() {
             Trayectoria {alumno.trayectoria.clave} — {alumno.trayectoria.nombre}
           </p>
         )}
+
+        <button
+          onClick={() => {
+            if (!abrirConstanciaCalificaciones(alumno, calificaciones)) {
+              setError(
+                "El navegador bloqueó la ventana emergente. Permítela para imprimir la constancia."
+              );
+            }
+          }}
+          disabled={calificaciones.length === 0}
+          className="mt-4 rounded-xl border border-gray-300 px-4 py-2 text-sm hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Constancia de calificaciones
+          {calificaciones.length > 0 && ` (${calificaciones.length} materias)`}
+        </button>
       </section>
 
       {error && (

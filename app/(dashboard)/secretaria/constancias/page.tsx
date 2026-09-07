@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/config";
-// Una sola fuente de verdad para los datos de la institución.
-import { ESCUELA as INSTITUCION } from "@/lib/documentos";
+// La constancia se arma en lib/documentos: una sola plantilla membretada
+// para todos los documentos oficiales.
+import { abrirConstancia, type TipoConstancia } from "@/lib/documentos";
 import { notificar } from "@/lib/notificar";
 
 const COLOR: Record<string, string> = {
@@ -14,14 +15,16 @@ const COLOR: Record<string, string> = {
   CANCELADO: "bg-red-100 text-red-700",
 };
 
-const ESCUELA = INSTITUCION.nombre;
-const DOMICILIO = INSTITUCION.domicilio;
-
 export default function SecretariaConstanciasPage() {
   const [tramites, setTramites] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [aviso, setAviso] = useState("");
+
+  // Las tres variantes que se emiten en ventanilla.
+  const [tipo, setTipo] = useState<TipoConstancia>("TERMINADO");
+
+  const [ciclo, setCiclo] = useState<any>(null);
 
   const cargar = async () => {
     try {
@@ -38,6 +41,15 @@ export default function SecretariaConstanciasPage() {
       if (!res.ok) throw new Error(json?.message || "Error al cargar");
 
       setTramites(json?.data ?? []);
+
+      // Ciclo activo: de ahí salen el nombre y las fechas de curso.
+      const rc = await fetch(`${API_URL}/api/ciclos?activo=true`, {
+        credentials: "include",
+      });
+
+      const jc = await rc.json();
+
+      setCiclo((jc?.data ?? []).find((c: any) => c.activo) ?? jc?.data?.[0] ?? null);
       setError("");
     } catch (e: any) {
       setError(e.message || "Error al cargar constancias");
@@ -69,80 +81,35 @@ export default function SecretariaConstanciasPage() {
     cargar();
   };
 
-  // 🔥 Antes esto era un notificar("Generar constancia", "alerta").
-  // Ahora abre el documento listo para imprimir o guardar en PDF
-  // desde el propio navegador.
+  const comoTexto = (v?: string | null) =>
+    v
+      ? new Date(v).toLocaleDateString("es-MX", {
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+        })
+      : "—";
+
+  // Abre la constancia en hoja membretada, lista para imprimir o guardar
+  // en PDF desde el navegador.
   const generar = (t: any) => {
-    const fecha = new Date().toLocaleDateString("es-MX", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
+    const ok = abrirConstancia(t.alumno, {
+      tipo,
+      folioRecibo: t.pago?.folio,
+      ciclo: ciclo?.nombre,
+      semestre: t.alumno?.grupo?.semestre?.numero,
+      bachillerato: t.alumno?.trayectoria?.nombre,
+      turno: t.alumno?.grupo?.turno?.nombre,
+      inicioCurso: comoTexto(ciclo?.fechaInicio),
+      finCurso: comoTexto(ciclo?.fechaFin),
     });
 
-    const alumno = t.alumno;
-
-    const ventana = window.open("", "_blank", "width=800,height=1000");
-
-    if (!ventana) {
+    if (!ok) {
       setError(
         "El navegador bloqueó la ventana emergente. Permítela para generar la constancia."
       );
       return;
     }
-
-    ventana.document.write(`
-      <html>
-        <head>
-          <title>Constancia - ${alumno?.matricula ?? ""}</title>
-          <style>
-            body { font-family: Georgia, serif; padding: 60px; line-height: 1.8; color: #111; }
-            h1 { text-align: center; font-size: 30px; font-weight: 800; letter-spacing: 5px; }
-            h2 { text-align: center; font-size: 15px; font-weight: normal; margin-top: 40px; }
-            .sello { text-align: center; margin-top: 90px; }
-            .linea { border-top: 1px solid #000; width: 260px; margin: 0 auto; padding-top: 6px; }
-            .pie { margin-top: 50px; font-size: 11px; color: #555; text-align: center; }
-            p { text-align: justify; }
-          </style>
-        </head>
-        <body>
-          <h1>${ESCUELA}</h1>
-          <p style="text-align:center; font-size:12px;">${DOMICILIO}</p>
-
-          <h2>CONSTANCIA DE ESTUDIOS</h2>
-
-          <p>
-            A quien corresponda:
-          </p>
-
-          <p>
-            Por medio de la presente se hace constar que
-            <strong>${alumno?.user?.name ?? ""}</strong>, con matrícula
-            <strong>${alumno?.matricula ?? ""}</strong>, se encuentra inscrito
-            en esta institución en
-            <strong>${alumno?.carrera?.nombre ?? "el programa correspondiente"}</strong>,
-            grupo <strong>${alumno?.grupo?.nombre ?? "—"}</strong>.
-          </p>
-
-          <p>
-            Se extiende la presente a petición del interesado para los fines
-            legales que a este convengan, en la ciudad de Zamora, Michoacán,
-            a ${fecha}.
-          </p>
-
-          <div class="sello">
-            <div class="linea">Secretaría Escolar</div>
-          </div>
-
-          <div class="pie">
-            ${t.pago?.folio ? `Recibo de pago folio ${t.pago.folio}` : "Sin recibo asociado"}
-          </div>
-
-          <script>window.print();</script>
-        </body>
-      </html>
-    `);
-
-    ventana.document.close();
 
     // Al generarla queda lista para entregar.
     if (t.estado === "SOLICITADO" || t.estado === "EN_PROCESO") {
@@ -164,6 +131,24 @@ export default function SecretariaConstanciasPage() {
           {pendientes.length} pendiente(s). Las solicitudes llegan solas cuando
           caja cobra una constancia.
         </p>
+
+        <label className="mt-4 block text-sm">
+          <span className="mb-1 block text-gray-600">Tipo de constancia</span>
+
+          <select
+            value={tipo}
+            onChange={(e) => setTipo(e.target.value as TipoConstancia)}
+            className="rounded-xl border border-gray-300 px-3 py-2"
+          >
+            <option value="TERMINADO">Cursó y terminó el semestre</option>
+            <option value="CURSANDO_INVIERNO">
+              Cursando — receso de navidad y año nuevo
+            </option>
+            <option value="CURSANDO_PRIMAVERA">
+              Cursando — receso de semana santa y pascua
+            </option>
+          </select>
+        </label>
       </section>
 
       {error && (
