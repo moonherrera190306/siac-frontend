@@ -5,56 +5,62 @@
  * 🎨 TOKENS SIAC / CESZAM
  * =========================================
  *
- * Identidad: azules y grises con toques amarillos.
+ * La paleta sale del papel membretado, muestreada del archivo:
  *
- * Los amarillos son ACENTO: destacan una acción o un dato,
- * nunca son el fondo de una pantalla completa.
+ *   #00253f  azul marino de las bandas
+ *   #e6bf46  dorado del filete
+ *   #626262  gris de la franja
  *
- * Antes cada archivo redefinía sus radios, sombras y colores.
- * Todo eso vive aquí.
+ * El dorado es ACENTO: subraya lo activo o lo importante,
+ * nunca es el fondo de una pantalla completa.
+ *
+ * ⚠️ Estas variables NO se usan con utilidades de Tailwind
+ * (`bg-[var(--x)]`): no siempre se generan y el elemento queda sin
+ * estilo sin que nada avise. Ya pasó con el sidebar y con los avisos.
+ * Para estructura se usan las clases `.siac-*` de más abajo.
  */
 
 :root {
   /* superficies */
-  --siac-fondo: #f1f5f9;
+  --siac-fondo: #eef1f5;
   --siac-superficie: #ffffff;
-  --siac-superficie-alt: #f8fafc;
-  --siac-borde: #e2e8f0;
-  --siac-borde-fuerte: #cbd5e1;
+  --siac-superficie-alt: #f7f9fb;
+  --siac-borde: #e3e8ef;
+  --siac-borde-fuerte: #c7d0dc;
 
   /* tinta */
-  --siac-tinta: #0f172a;
-  --siac-tinta-media: #475569;
-  --siac-tinta-suave: #94a3b8;
+  --siac-tinta: #0b1f30;
+  --siac-tinta-media: #52657a;
+  --siac-tinta-suave: #8b9bad;
 
-  /* azul institucional */
-  --siac-azul: #1d4ed8;
-  --siac-azul-hover: #1e40af;
-  --siac-azul-suave: #eff6ff;
-  --siac-azul-borde: #bfdbfe;
+  /* azul institucional — el del membrete */
+  --siac-marino: #00253f;
+  --siac-marino-claro: #06395e;
+  --siac-marino-hover: #003a63;
+  --siac-azul: #0b5c96;
+  --siac-azul-hover: #084a78;
+  --siac-azul-suave: #eaf2f8;
+  --siac-azul-borde: #b9d5e8;
 
-  /* gris profundo — encabezados y sidebar */
-  --siac-marino: #0f172a;
-  --siac-marino-claro: #1e293b;
+  /* acento dorado — el filete del membrete */
+  --siac-oro: #e6bf46;
+  --siac-oro-fuerte: #a8842a;
+  --siac-oro-suave: #fdf8e9;
+  --siac-oro-borde: #f0dfa4;
 
-  /* acento amarillo */
-  --siac-ambar: #f59e0b;
-  --siac-ambar-fuerte: #b45309;
-  --siac-ambar-suave: #fffbeb;
-  --siac-ambar-borde: #fde68a;
-
-  /* estado — reservados, nunca se usan como color de serie */
+  /* estado */
   --siac-bien: #15803d;
   --siac-bien-suave: #f0fdf4;
-  --siac-alerta: #b45309;
-  --siac-alerta-suave: #fffbeb;
-  --siac-grave: #b91c1c;
-  --siac-grave-suave: #fef2f2;
+  --siac-alerta: #a8842a;
+  --siac-alerta-suave: #fdf8e9;
+  --siac-grave: #b3261e;
+  --siac-grave-suave: #fdf1f0;
 
   /* forma */
-  --siac-radio: 1rem;
-  --siac-radio-sm: 0.625rem;
-  --siac-sombra: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.06);
+  --siac-radio: 0.875rem;
+  --siac-radio-sm: 0.5rem;
+  --siac-sombra: 0 1px 2px rgb(0 37 63 / 0.05), 0 2px 8px rgb(0 37 63 / 0.06);
+  --siac-sombra-alta: 0 10px 30px rgb(0 37 63 / 0.13);
 
   /* compatibilidad con lo anterior */
   --background: var(--siac-fondo);
@@ -87,6 +93,7 @@ body {
   background: var(--siac-fondo);
   color: var(--siac-tinta);
   font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 h1,
@@ -97,6 +104,7 @@ h5,
 h6 {
   color: var(--siac-tinta);
   margin: 0;
+  letter-spacing: -0.011em;
 }
 
 p {
@@ -111,6 +119,7 @@ textarea {
   color: var(--siac-tinta);
   border: 1px solid var(--siac-borde-fuerte);
   border-radius: var(--siac-radio-sm);
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 input::placeholder,
@@ -122,8 +131,8 @@ input:focus,
 select:focus,
 textarea:focus {
   outline: none;
-  border-color: var(--siac-azul);
-  box-shadow: 0 0 0 3px rgb(29 78 216 / 0.12);
+  border-color: var(--siac-marino);
+  box-shadow: 0 0 0 3px rgb(0 37 63 / 0.12);
 }
 
 /* tablas */
@@ -145,6 +154,162 @@ button {
 }
 
 ::selection {
-  background: var(--siac-azul-borde);
+  background: var(--siac-oro-borde);
   color: var(--siac-marino);
+}
+
+/**
+ * =========================================
+ * 🧱 CLASES DE ESTRUCTURA
+ * =========================================
+ * Escritas en CSS plano a propósito: con utilidades de Tailwind sobre
+ * variables el estilo se pierde en silencio.
+ */
+
+/* ── tarjetas ─────────────────────────────────────────────── */
+.siac-card {
+  background: var(--siac-superficie);
+  border: 1px solid var(--siac-borde);
+  border-radius: var(--siac-radio);
+  box-shadow: var(--siac-sombra);
+}
+
+/* Encabezado de sección: filete dorado arriba, como el papel. */
+.siac-card-titulo {
+  position: relative;
+  overflow: hidden;
+}
+
+.siac-card-titulo::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--siac-marino) 0 60%, var(--siac-oro) 60% 100%);
+}
+
+/* ── botones ──────────────────────────────────────────────── */
+.siac-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1.1rem;
+  border-radius: var(--siac-radio-sm);
+  border: 1px solid transparent;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.siac-btn-primario {
+  background: var(--siac-marino);
+  color: #fff;
+}
+
+.siac-btn-primario:hover:not(:disabled) {
+  background: var(--siac-marino-hover);
+}
+
+.siac-btn-primario:disabled {
+  background: var(--siac-tinta-suave);
+  cursor: not-allowed;
+}
+
+.siac-btn-secundario {
+  background: var(--siac-superficie);
+  border-color: var(--siac-borde-fuerte);
+  color: var(--siac-tinta);
+}
+
+.siac-btn-secundario:hover:not(:disabled) {
+  background: var(--siac-superficie-alt);
+  border-color: var(--siac-marino);
+}
+
+.siac-btn-secundario:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── barra lateral ────────────────────────────────────────── */
+.siac-sidebar {
+  background: var(--siac-marino);
+  color: #dbe4ec;
+}
+
+.siac-sidebar-seccion {
+  border-color: rgb(255 255 255 / 0.1);
+}
+
+.siac-nav-item {
+  display: block;
+  text-decoration: none;
+  position: relative;
+  padding: 0.5rem 0.75rem 0.5rem 1rem;
+  border-radius: var(--siac-radio-sm);
+  font-size: 0.875rem;
+  color: #b9c8d6;
+  transition: background 0.15s, color 0.15s;
+}
+
+.siac-nav-item:hover {
+  background: rgb(255 255 255 / 0.07);
+  color: #fff;
+}
+
+/* Lo activo se marca con el dorado del membrete, no con otro azul. */
+.siac-nav-item-activo {
+  background: rgb(255 255 255 / 0.1);
+  color: #fff;
+  font-weight: 600;
+}
+
+.siac-nav-item-activo::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--siac-oro);
+}
+
+/* ── etiquetas de estado ──────────────────────────────────── */
+.siac-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.siac-tag-bien {
+  background: var(--siac-bien-suave);
+  color: var(--siac-bien);
+}
+
+.siac-tag-alerta {
+  background: var(--siac-alerta-suave);
+  color: var(--siac-alerta);
+}
+
+.siac-tag-grave {
+  background: var(--siac-grave-suave);
+  color: var(--siac-grave);
+}
+
+.siac-tag-neutro {
+  background: var(--siac-superficie-alt);
+  color: var(--siac-tinta-media);
+}
+
+/* ── fondo institucional (login) ──────────────────────────── */
+.siac-fondo-marino {
+  background:
+    radial-gradient(1100px 520px at 50% -10%, #06395e 0%, transparent 60%),
+    var(--siac-marino);
 }

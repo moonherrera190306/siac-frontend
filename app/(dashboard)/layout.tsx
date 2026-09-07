@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/config";
@@ -300,8 +301,27 @@ export default function DashboardLayout({
 ],
   };
 
-  const menu =
-    roleMenu[user?.role] || [];
+  const menu = roleMenu[user?.role] || [];
+
+  const ROL: Record<string, string> = {
+    ADMIN: "Administración",
+    DIRECTOR: "Dirección",
+    SECRETARIA: "Secretaría Escolar",
+    CAJA: "Caja",
+    MAESTRO: "Docente",
+    ALUMNO: "Alumno",
+  };
+
+  // Título de la pantalla actual, para el encabezado de escritorio.
+  const actual = menu.find((m: any) => m.path === pathname)?.label ?? "";
+
+  const iniciales = (user?.name ?? "")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p: string) => p[0])
+    .join("")
+    .toUpperCase();
 
   const logout = async () => {
     // 🔐 La cookie httpOnly solo la puede borrar el backend.
@@ -320,22 +340,23 @@ export default function DashboardLayout({
   };
 
   return (
-    <div className="min-h-screen bg-slate-100">
-
+    <div className="min-h-screen" style={{ background: "var(--siac-fondo)" }}>
       {/* ================= BARRA MÓVIL ================= */}
-      <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 md:hidden">
+      <header className="siac-sidebar sticky top-0 z-30 flex items-center gap-3 px-4 py-3 md:hidden">
         <button
           onClick={() => setMenuAbierto(true)}
           aria-label="Abrir menú"
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-lg leading-none text-slate-700"
+          className="rounded-lg border border-white/25 px-3 py-1.5 text-lg leading-none text-white"
         >
           ☰
         </button>
 
-        <span className="text-lg font-bold text-slate-900">SIAC</span>
+        <span className="text-base font-bold tracking-[0.14em] text-white">
+          SIAC
+        </span>
 
-        <span className="ml-auto text-xs font-medium text-slate-500">
-          {user?.role}
+        <span className="ml-auto text-[11px] font-medium text-white/70">
+          {ROL[user?.role] ?? user?.role}
         </span>
       </header>
 
@@ -343,7 +364,7 @@ export default function DashboardLayout({
       {menuAbierto && (
         <div
           onClick={() => setMenuAbierto(false)}
-          className="fixed inset-0 z-40 bg-slate-900/50 md:hidden"
+          className="fixed inset-0 z-40 bg-slate-900/60 md:hidden"
           role="presentation"
         />
       )}
@@ -354,64 +375,77 @@ export default function DashboardLayout({
           margen, no con flex: así no hay forma de que se encimen. */}
       <aside
         className={
-          "fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-slate-900 text-white transition-transform duration-200 md:translate-x-0 " +
+          "siac-sidebar fixed inset-y-0 left-0 z-50 flex w-64 flex-col transition-transform duration-200 md:translate-x-0 " +
           (menuAbierto ? "translate-x-0" : "-translate-x-full")
         }
       >
-        {/* MARCA */}
-        <div className="flex items-center justify-between border-b border-slate-800 px-5 py-5">
-          <div>
-            <p className="text-2xl font-bold tracking-tight">SIAC</p>
-            <p className="text-[11px] text-slate-400">
-              Sistema Integral Académico
+        {/* MARCA — el escudo de la escuela, no un cuadro de color */}
+        <div className="siac-sidebar-seccion flex items-center gap-3 border-b px-5 py-4">
+          <Image
+            src="/escudo-ceszam.png"
+            alt=""
+            width={361}
+            height={420}
+            className="h-10 w-auto flex-none"
+          />
+
+          <div className="min-w-0">
+            <p className="text-lg font-bold leading-none tracking-[0.14em] text-white">
+              SIAC
+            </p>
+            <p className="mt-1 truncate text-[10.5px] leading-tight text-white/55">
+              Centro de Estudios
+              <br />
+              Superiores de Zamora
             </p>
           </div>
 
           <button
             onClick={() => setMenuAbierto(false)}
             aria-label="Cerrar menú"
-            className="text-2xl leading-none text-slate-400 md:hidden"
+            className="ml-auto text-2xl leading-none text-white/60 md:hidden"
           >
             ×
           </button>
         </div>
 
         {/* USUARIO */}
-        <div className="border-b border-slate-800 px-5 py-4">
-          <p className="truncate text-sm font-semibold">
-            {user?.name || "Usuario"}
-          </p>
+        <div className="siac-sidebar-seccion flex items-center gap-3 border-b px-5 py-3.5">
+          <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-white/10 text-xs font-bold text-white">
+            {iniciales || "··"}
+          </span>
 
-          <p className="text-xs text-slate-400">{user?.role}</p>
+          <div className="min-w-0">
+            <p className="truncate text-[13px] font-semibold text-white">
+              {user?.name || "Usuario"}
+            </p>
+            <p className="text-[11px] text-white/55">
+              {ROL[user?.role] ?? user?.role}
+            </p>
+          </div>
         </div>
 
         {/* MENÚ */}
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-          {menu.map((item: any) => {
-            const activo = pathname === item.path;
-
-            return (
-              <Link
-                key={item.path}
-                href={item.path}
-                className={
-                  "block rounded-lg px-3 py-2 text-sm transition " +
-                  (activo
-                    ? "bg-blue-600 font-medium text-white"
-                    : "text-slate-300 hover:bg-slate-800 hover:text-white")
-                }
-              >
-                {item.label}
-              </Link>
-            );
-          })}
+        <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
+          {menu.map((item: any) => (
+            <Link
+              key={item.path}
+              href={item.path}
+              className={
+                "siac-nav-item" +
+                (pathname === item.path ? " siac-nav-item-activo" : "")
+              }
+            >
+              {item.label}
+            </Link>
+          ))}
         </nav>
 
         {/* SALIR */}
-        <div className="border-t border-slate-800 p-3">
+        <div className="siac-sidebar-seccion border-t p-3">
           <button
             onClick={logout}
-            className="w-full rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
+            className="w-full rounded-lg border border-white/20 px-3 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
           >
             Cerrar sesión
           </button>
@@ -420,9 +454,20 @@ export default function DashboardLayout({
 
       {/* ================= CONTENIDO =================
           `md:ml-64` deja exactamente el ancho del sidebar libre. */}
-      <main className="min-w-0 p-4 md:ml-64 md:p-8">
-        <div className="mx-auto max-w-7xl space-y-6">{children}</div>
-      </main>
+      <div className="md:ml-64">
+        {/* Encabezado de escritorio: ubica al usuario sin repetir el menú. */}
+        <header className="hidden items-center gap-3 border-b border-slate-200 bg-white px-8 py-3.5 md:flex">
+          <h2 className="text-sm font-semibold text-slate-800">{actual}</h2>
+
+          <span className="ml-auto text-xs text-slate-400">
+            {ROL[user?.role] ?? user?.role}
+          </span>
+        </header>
+
+        <main className="min-w-0 p-4 md:p-8">
+          <div className="mx-auto max-w-7xl space-y-6">{children}</div>
+        </main>
+      </div>
     </div>
   );
 }
