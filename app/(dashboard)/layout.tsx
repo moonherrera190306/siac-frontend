@@ -301,7 +301,15 @@ export default function DashboardLayout({
 ],
   };
 
-  const menu = roleMenu[user?.role] || [];
+  // 🔥 Un directivo que además da clase tiene ficha de docente: se le
+  // agregan las pantallas de maestro a su menú, para que no tenga que
+  // cambiar de cuenta. El backend le abre esas rutas por la misma razón.
+  const menu = [
+    ...(roleMenu[user?.role] || []),
+    ...(user?.docenteId && user?.role !== "MAESTRO"
+      ? [{ separador: "Docencia" }, ...roleMenu.MAESTRO.slice(1)]
+      : []),
+  ];
 
   const ROL: Record<string, string> = {
     ADMIN: "Administración",
@@ -427,18 +435,27 @@ export default function DashboardLayout({
 
         {/* MENÚ */}
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
-          {menu.map((item: any) => (
-            <Link
-              key={item.path}
-              href={item.path}
-              className={
-                "siac-nav-item" +
-                (pathname === item.path ? " siac-nav-item-activo" : "")
-              }
-            >
-              {item.label}
-            </Link>
-          ))}
+          {menu.map((item: any) =>
+            item.separador ? (
+              <p
+                key={item.separador}
+                className="mt-4 px-4 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40"
+              >
+                {item.separador}
+              </p>
+            ) : (
+              <Link
+                key={item.path}
+                href={item.path}
+                className={
+                  "siac-nav-item" +
+                  (pathname === item.path ? " siac-nav-item-activo" : "")
+                }
+              >
+                {item.label}
+              </Link>
+            ),
+          )}
         </nav>
 
         {/* SALIR */}
