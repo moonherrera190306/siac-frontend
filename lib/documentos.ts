@@ -19,10 +19,52 @@ export const ESCUELA = {
   claveIncorporacion: "11257",
   claveCT: "16PBH0029Y",
   expediente: '112-218.1"24"',
+  // Firmante por omisión; el catálogo completo está más abajo.
   director: "M. en E. CUAUHTÉMOC OROZCO GIL",
   cargoDirector: "DIRECTOR DE LA PREPARATORIA",
+
+  // Iniciales del subdirector + año. Va al pie de cada constancia.
   referencia: "J.R.V.C/2026-0",
 };
+
+/**
+ * ✍️ QUIÉN FIRMA
+ *
+ * Hay dos direcciones —preparatoria y universidad— y las constancias las
+ * puede firmar cualquiera de los cuatro directivos. Quien genera el
+ * documento elige; por eso esto es un catálogo y no una constante.
+ */
+export interface Firmante {
+  clave: string;
+  nombre: string;
+  cargo: string;
+}
+
+export const FIRMANTES: Firmante[] = [
+  {
+    clave: "COG",
+    nombre: "M. en E. CUAUHTÉMOC OROZCO GIL",
+    cargo: "DIRECTOR DE LA PREPARATORIA",
+  },
+  {
+    clave: "IOG",
+    nombre: "LIC. IGOR OROZCO GIL",
+    cargo: "DIRECTOR DE LA UNIVERSIDAD",
+  },
+  {
+    clave: "JRVC",
+    nombre: "JOSÉ RAMÓN VEGA CERDA",
+    cargo: "SUBDIRECTOR",
+  },
+  {
+    clave: "JFVD",
+    nombre: "JUAN FERNANDO VELÁZQUEZ DURÁN",
+    cargo: "COORDINADOR ACADÉMICO",
+  },
+];
+
+export const firmantePorClave = (clave?: string): Firmante =>
+  FIRMANTES.find((f) => f.clave === clave) ?? FIRMANTES[0];
 
 /**
  * 📄 HOJA MEMBRETADA
@@ -551,10 +593,14 @@ export interface DatosConstancia {
   inicioCurso?: string;
   finCurso?: string;
   folioRecibo?: number | string;
+  /** Clave del firmante (COG, IOG, JRVC, JFVD). Por omisión, el de prepa. */
+  firmante?: string;
 }
 
 export function abrirConstancia(alumno: any, datos: DatosConstancia = {}): boolean {
   const tipo = datos.tipo ?? "TERMINADO";
+
+  const firma = firmantePorClave(datos.firmante);
 
   const nombre = (alumno?.user?.name ?? "—").toUpperCase();
 
@@ -627,8 +673,8 @@ export function abrirConstancia(alumno: any, datos: DatosConstancia = {}): boole
     </p>
 
     <div class="firma">
-      <p>${ESCUELA.cargoDirector}</p>
-      <p>${ESCUELA.director}</p>
+      <p>${firma.cargo}</p>
+      <p>${firma.nombre}</p>
     </div>
 
     <p class="referencia">${ESCUELA.referencia}</p>
@@ -704,6 +750,8 @@ export function abrirConstanciaCalificaciones(
   datos: DatosConstancia = {}
 ): boolean {
   const nombre = (alumno?.user?.name ?? "—").toUpperCase();
+
+  const firma = firmantePorClave(datos.firmante);
 
   const bachillerato =
     datos.bachillerato ?? alumno?.trayectoria?.nombre ?? alumno?.carrera?.nombre ?? "—";
@@ -796,8 +844,8 @@ export function abrirConstanciaCalificaciones(
       <p class="lugar-fecha">Zamora Michoacán, a ${fechaLarga()}</p>
 
       <div class="firma">
-        <p>${ESCUELA.cargoDirector}</p>
-        <p>${ESCUELA.director}</p>
+        <p>${firma.cargo}</p>
+        <p>${firma.nombre}</p>
       </div>
 
       <p class="nota-pie">

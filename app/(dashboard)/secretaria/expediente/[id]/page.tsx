@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { API_URL } from "@/lib/config";
-import { abrirConstanciaCalificaciones } from "@/lib/documentos";
+import {
+  abrirConstanciaCalificaciones,
+  FIRMANTES,
+} from "@/lib/documentos";
 
 const COLOR_DOC: Record<string, string> = {
   VALIDADO: "bg-green-100 text-green-700",
@@ -30,6 +33,8 @@ export default function ExpedientePage() {
   const [aviso, setAviso] = useState("");
 
   const [calificaciones, setCalificaciones] = useState<any[]>([]);
+
+  const [firmante, setFirmante] = useState(FIRMANTES[0].clave);
 
   const [nuevoDoc, setNuevoDoc] = useState({ nombre: "", tipo: "", url: "" });
 
@@ -157,20 +162,40 @@ export default function ExpedientePage() {
           </p>
         )}
 
+        <div className="mt-4 flex flex-wrap items-end gap-3">
+        <label className="text-sm">
+          <span className="mb-1 block text-gray-600">Firma</span>
+
+          <select
+            value={firmante}
+            onChange={(e) => setFirmante(e.target.value)}
+            className="rounded-xl border border-gray-300 px-3 py-2 text-sm"
+          >
+            {FIRMANTES.map((f) => (
+              <option key={f.clave} value={f.clave}>
+                {f.cargo}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <button
           onClick={() => {
-            if (!abrirConstanciaCalificaciones(alumno, calificaciones)) {
+            if (
+              !abrirConstanciaCalificaciones(alumno, calificaciones, { firmante })
+            ) {
               setError(
                 "El navegador bloqueó la ventana emergente. Permítela para imprimir la constancia."
               );
             }
           }}
           disabled={calificaciones.length === 0}
-          className="mt-4 rounded-xl border border-gray-300 px-4 py-2 text-sm hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
+          className="siac-btn siac-btn-secundario disabled:cursor-not-allowed disabled:opacity-40"
         >
           Constancia de calificaciones
           {calificaciones.length > 0 && ` (${calificaciones.length} materias)`}
         </button>
+        </div>
       </section>
 
       {error && (

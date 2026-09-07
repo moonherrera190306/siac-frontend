@@ -4,8 +4,11 @@ import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/config";
 // La constancia se arma en lib/documentos: una sola plantilla membretada
 // para todos los documentos oficiales.
-import { abrirConstancia, type TipoConstancia } from "@/lib/documentos";
-import { notificar } from "@/lib/notificar";
+import {
+  abrirConstancia,
+  FIRMANTES,
+  type TipoConstancia,
+} from "@/lib/documentos";
 
 const COLOR: Record<string, string> = {
   SOLICITADO: "bg-amber-100 text-amber-700",
@@ -25,6 +28,9 @@ export default function SecretariaConstanciasPage() {
   const [tipo, setTipo] = useState<TipoConstancia>("TERMINADO");
 
   const [ciclo, setCiclo] = useState<any>(null);
+
+  // Hay dos direcciones y cuatro directivos: quien genera elige quién firma.
+  const [firmante, setFirmante] = useState(FIRMANTES[0].clave);
 
   const cargar = async () => {
     try {
@@ -95,6 +101,7 @@ export default function SecretariaConstanciasPage() {
   const generar = (t: any) => {
     const ok = abrirConstancia(t.alumno, {
       tipo,
+      firmante,
       folioRecibo: t.pago?.folio,
       ciclo: ciclo?.nombre,
       semestre: t.alumno?.grupo?.semestre?.numero,
@@ -132,7 +139,8 @@ export default function SecretariaConstanciasPage() {
           caja cobra una constancia.
         </p>
 
-        <label className="mt-4 block text-sm">
+        <div className="mt-4 flex flex-wrap gap-4">
+        <label className="block text-sm">
           <span className="mb-1 block text-gray-600">Tipo de constancia</span>
 
           <select
@@ -149,6 +157,23 @@ export default function SecretariaConstanciasPage() {
             </option>
           </select>
         </label>
+
+        <label className="block text-sm">
+          <span className="mb-1 block text-gray-600">Firma</span>
+
+          <select
+            value={firmante}
+            onChange={(e) => setFirmante(e.target.value)}
+            className="rounded-xl border border-gray-300 px-3 py-2"
+          >
+            {FIRMANTES.map((f) => (
+              <option key={f.clave} value={f.clave}>
+                {f.cargo} — {f.nombre}
+              </option>
+            ))}
+          </select>
+        </label>
+        </div>
       </section>
 
       {error && (
