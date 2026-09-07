@@ -3,10 +3,23 @@
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/config";
 
+function hoy() {
+  const d = new Date();
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mes}-${dia}`;
+}
+
 export default function DirectorBitacoraPage() {
-  const [pestana, setPestana] = useState<"cumplimiento" | "bitacora">(
-    "cumplimiento"
-  );
+  const [pestana, setPestana] = useState<
+    "registro" | "cumplimiento" | "bitacora"
+  >("registro");
+
+  const [fechaRegistro, setFechaRegistro] = useState(hoy());
+  const [registroDia, setRegistroDia] = useState<any[]>([]);
+  const [metaRegistro, setMetaRegistro] = useState<any>({});
+  const [soloSinRegistro, setSoloSinRegistro] = useState(false);
+  const [cargandoRegistro, setCargandoRegistro] = useState(true);
 
   const [cumplimiento, setCumplimiento] = useState<any[]>([]);
   const [metaCump, setMetaCump] = useState<any>({});
@@ -18,6 +31,29 @@ export default function DirectorBitacoraPage() {
   const [generando, setGenerando] = useState(false);
   const [error, setError] = useState("");
   const [aviso, setAviso] = useState("");
+
+  const cargarRegistroDia = async (dia: string) => {
+    try {
+      setCargandoRegistro(true);
+
+      const res = await fetch(
+        `${API_URL}/api/clases/registro-dia?fecha=${dia}`,
+        { credentials: "include" }
+      );
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        setError(json?.message || "Error al cargar el registro del día");
+        return;
+      }
+
+      setRegistroDia(json?.data ?? []);
+      setMetaRegistro(json?.meta ?? {});
+    } finally {
+      setCargandoRegistro(false);
+    }
+  };
 
   const cargarCumplimiento = async () => {
     const res = await fetch(`${API_URL}/api/clases/cumplimiento`, {
@@ -56,7 +92,11 @@ export default function DirectorBitacoraPage() {
   useEffect(() => {
     const cargar = async () => {
       try {
-        await Promise.all([cargarCumplimiento(), cargarBitacora(false)]);
+        await Promise.all([
+          cargarRegistroDia(fechaRegistro),
+          cargarCumplimiento(),
+          cargarBitacora(false),
+        ]);
         setError("");
       } finally {
         setLoading(false);
@@ -64,6 +104,7 @@ export default function DirectorBitacoraPage() {
     };
 
     cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const generarClases = async () => {
@@ -162,6 +203,17 @@ export default function DirectorBitacoraPage() {
 
       <div className="flex gap-2">
         <button
+          onClick={() => setPestana("registro")}
+          className={`rounded-xl px-4 py-2 text-sm font-medium ${
+            pestana === "registro"
+              ? "bg-slate-900 text-white"
+              : "border bg-white hover:bg-gray-50"
+          }`}
+        >
+          Registro del día
+        </button>
+
+        <button
           onClick={() => setPestana("cumplimiento")}
           className={`rounded-xl px-4 py-2 text-sm font-medium ${
             pestana === "cumplimiento"
@@ -183,6 +235,162 @@ export default function DirectorBitacoraPage() {
           Bitácora
         </button>
       </div>
+
+      {pestana === "registro" && (
+        <>
+          <section className="flex flex-col gap-4 rounded-2xl border bg-white p-5 shadow-sm md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm text-gray-500">
+                Un docente solo puede registrar su clase dentro de{" "}
+                {metaRegistro.toleranciaMinutos ?? "—"} minutos desde la hora
+                de inicio.
+              </p>
+            </div>
+
+            <input
+              type="date"
+              value={fechaRegistro}
+              onChange={(e) => {
+                setFechaRegistro(e.target.value);
+                cargarRegistroDia(e.target.value);
+              }}
+              className="rounded-xl border border-gray-300 px-4 py-2"
+            />
+          </section>
+
+          <div className="grid gap-4 md:grid-cols-4">
+            <div className="rounded-2xl border bg-white p-5 shadow-sm">
+              <p className="text-sm text-gray-500">Programadas</p>
+              <h2 className="text-2xl font-bold">
+                {metaRegistro.programadas ?? 0}
+              </h2>
+            </div>
+
+            <div className="rounded-2xl border bg-white p-5 shadow-sm">
+              <p className="text-sm text-gray-500">Registradas</p>
+              <h2 className="text-2xl font-bold text-green-700">
+                {metaRegistro.registradas ?? 0}
+              </h2>
+            </div>
+
+            <div className="rounded-2xl border bg-white p-5 shadow-sm">
+              <p className="text-sm text-gray-500">Tarde</p>
+              <h2 className="text-2xl font-bold text-amber-700">
+                {metaRegistro.tarde ?? 0}
+              </h2>
+            </div>
+
+            <div className="rounded-2xl border bg-white p-5 shadow-sm">
+              <p className="text-sm text-gray-500">Sin registro</p>
+              <h2 className="text-2xl font-bold text-red-700">
+                {metaRegistro.sinRegistro ?? 0}
+              </h2>
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm text-gray-600">
+            <input
+              type="checkbox"
+              checked={soloSinRegistro}
+              onChange={(e) => setSoloSinRegistro(e.target.checked)}
+            />
+            Solo sin registro
+          </label>
+
+          {cargandoRegistro ? (
+            <p className="text-gray-500">Cargando...</p>
+          ) : registroDia.length === 0 ? (
+            <div className="rounded-2xl border bg-white p-8 text-center text-gray-500">
+              No hay clases programadas para esta fecha.
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-50 text-gray-600">
+                  <tr>
+                    <th className="px-4 py-3">Hora</th>
+                    <th className="px-4 py-3">Docente</th>
+                    <th className="px-4 py-3">Materia</th>
+                    <th className="px-4 py-3">Grupo</th>
+                    <th className="px-4 py-3">Aula</th>
+                    <th className="px-4 py-3">Tema</th>
+                    <th className="px-4 py-3 text-center">Alumnos</th>
+                    <th className="px-4 py-3 text-center">Estado</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {registroDia
+                    .filter((r) =>
+                      soloSinRegistro ? r.estado === "SIN_REGISTRO" : true
+                    )
+                    .sort((a, b) =>
+                      (a.horaInicio || "").localeCompare(b.horaInicio || "")
+                    )
+                    .map((r) => (
+                      <tr key={r.horarioId} className="border-t align-top">
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {r.horaInicio}–{r.horaFin}
+                        </td>
+
+                        <td className="px-4 py-3 font-medium">
+                          {r.docente}
+                        </td>
+
+                        <td className="px-4 py-3">{r.materia}</td>
+
+                        <td className="px-4 py-3">{r.grupo}</td>
+
+                        <td className="px-4 py-3 text-gray-500">
+                          {r.aula || "—"}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <p className="text-gray-700">{r.tema || "—"}</p>
+                          {r.incidencias && (
+                            <p className="mt-1 text-xs text-amber-700">
+                              {r.incidencias}
+                            </p>
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3 text-center">
+                          {r.alumnos ?? "—"}
+                        </td>
+
+                        <td className="px-4 py-3 text-center">
+                          {r.estado === "REGISTRADA" && (
+                            <span className="rounded-full bg-green-100 px-3 py-1 text-xs text-green-700">
+                              registrada
+                            </span>
+                          )}
+
+                          {r.estado === "REGISTRADA_TARDE" && (
+                            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs text-amber-700">
+                              tarde · {r.minutosRetardo} min
+                            </span>
+                          )}
+
+                          {r.estado === "EN_TIEMPO" && (
+                            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
+                              aún puede registrar
+                            </span>
+                          )}
+
+                          {r.estado === "SIN_REGISTRO" && (
+                            <span className="rounded-full bg-red-100 px-3 py-1 text-xs text-red-700">
+                              sin registro
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
 
       {pestana === "cumplimiento" && (
         <>

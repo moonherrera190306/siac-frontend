@@ -18,6 +18,10 @@ function hoy() {
 }
 
 export default function MaestroAsistenciaPage() {
+  // "lista" = pasar lista sesión por sesión (lo que ya existía).
+  // "directa" = captura mensual por número de clases impartidas.
+  const [pestana, setPestana] = useState<"lista" | "directa">("lista");
+
   const [asignaciones, setAsignaciones] = useState<any[]>([]);
   const [asignacionId, setAsignacionId] = useState("");
   const [fecha, setFecha] = useState(hoy());
@@ -41,6 +45,19 @@ export default function MaestroAsistenciaPage() {
 
   const [error, setError] = useState("");
   const [aviso, setAviso] = useState("");
+
+  // ---- Captura mensual por número de clases (pestaña "directa") ----
+  const [asignacionDirectaId, setAsignacionDirectaId] = useState("");
+  const [mes, setMes] = useState(1);
+  const [clasesImpartidas, setClasesImpartidas] = useState(0);
+  const [alumnosDirecta, setAlumnosDirecta] = useState<any[]>([]);
+  const [infoDirecta, setInfoDirecta] = useState<any>(null);
+
+  const [cargandoDirecta, setCargandoDirecta] = useState(false);
+  const [guardandoDirecta, setGuardandoDirecta] = useState(false);
+
+  const [errorDirecta, setErrorDirecta] = useState("");
+  const [avisoDirecta, setAvisoDirecta] = useState("");
 
   useEffect(() => {
     const cargar = async () => {
@@ -179,6 +196,85 @@ export default function MaestroAsistenciaPage() {
     setVerHistorial(true);
   };
 
+  const abrirDirecta = async (id: string, mesSel: number) => {
+    try {
+      setCargandoDirecta(true);
+      setAsignacionDirectaId(id);
+      setErrorDirecta("");
+      setAvisoDirecta("");
+
+      const res = await fetch(
+        `${API_URL}/api/asistencias/directa/${id}?mes=${mesSel}`,
+        { credentials: "include" }
+      );
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json?.message || "Error al cargar la captura mensual");
+      }
+
+      setInfoDirecta(json?.data?.asignacion ?? null);
+      setClasesImpartidas(json?.data?.clasesImpartidas ?? 0);
+      setAlumnosDirecta(json?.data?.alumnos ?? []);
+    } catch (e: any) {
+      setErrorDirecta(e.message || "Error al cargar la captura mensual");
+      setAlumnosDirecta([]);
+      setInfoDirecta(null);
+    } finally {
+      setCargandoDirecta(false);
+    }
+  };
+
+  const marcarAsistenciaDirecta = (alumnoId: string, valor: number) => {
+    setAlumnosDirecta((prev) =>
+      prev.map((a) => (a.alumnoId === alumnoId ? { ...a, asistencias: valor } : a))
+    );
+  };
+
+  const marcarTodosCompletoDirecta = () => {
+    setAlumnosDirecta((prev) =>
+      prev.map((a) => ({ ...a, asistencias: clasesImpartidas }))
+    );
+  };
+
+  const guardarDirecta = async () => {
+    setErrorDirecta("");
+    setAvisoDirecta("");
+
+    try {
+      setGuardandoDirecta(true);
+
+      const res = await fetch(`${API_URL}/api/asistencias/directa`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          asignacionId: asignacionDirectaId,
+          mes,
+          clasesImpartidas,
+          alumnos: alumnosDirecta.map((a) => ({
+            alumnoId: a.alumnoId,
+            asistencias: a.asistencias,
+          })),
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        setErrorDirecta(json?.message || "No se pudo guardar la captura mensual");
+        return;
+      }
+
+      setAvisoDirecta("Captura mensual guardada");
+    } catch {
+      setErrorDirecta("Error de conexión con el servidor");
+    } finally {
+      setGuardandoDirecta(false);
+    }
+  };
+
   const resumen = {
     presentes: alumnos.filter((a) => a.estado === "PRESENTE").length,
     retardos: alumnos.filter((a) => a.estado === "RETARDO").length,
@@ -197,6 +293,32 @@ export default function MaestroAsistenciaPage() {
         </p>
       </section>
 
+      <div className="flex gap-2">
+        <button
+          onClick={() => setPestana("lista")}
+          className={`rounded-xl px-4 py-2 text-sm font-medium ${
+            pestana === "lista"
+              ? "bg-slate-900 text-white"
+              : "border bg-white hover:bg-gray-50"
+          }`}
+        >
+          Pasar lista
+        </button>
+
+        <button
+          onClick={() => setPestana("directa")}
+          className={`rounded-xl px-4 py-2 text-sm font-medium ${
+            pestana === "directa"
+              ? "bg-slate-900 text-white"
+              : "border bg-white hover:bg-gray-50"
+          }`}
+        >
+          Por número de clases
+        </button>
+      </div>
+
+      {pestana === "lista" && (
+        <>
       {error && (
         <p className="rounded-xl bg-red-50 p-4 text-red-600">{error}</p>
       )}
@@ -436,6 +558,187 @@ export default function MaestroAsistenciaPage() {
             </table>
           )}
         </section>
+      )}
+        </>
+      )}
+
+      {pestana === "directa" && (
+        <>
+          <section className="rounded-3xl border bg-white p-5 shadow-sm">
+            <p className="text-sm text-amber-700">
+              Esta captura sobrescribe el acumulado del mes seleccionado:
+              úsala para registrar el total de clases impartidas y de
+              asistencias del periodo, no sesión por sesión.
+            </p>
+
+            <div className="mt-4 flex flex-wrap items-end gap-4">
+              <div>
+                <label className="text-sm text-gray-600">Mes</label>
+                <select
+                  value={mes}
+                  onChange={(e) => {
+                    const m = Number(e.target.value);
+                    setMes(m);
+                    if (asignacionDirectaId) abrirDirecta(asignacionDirectaId, m);
+                  }}
+                  className="mt-1 block rounded-xl border border-gray-300 px-4 py-2"
+                >
+                  <option value={1}>Mes 1</option>
+                  <option value={2}>Mes 2</option>
+                  <option value={3}>Mes 3</option>
+                  <option value={4}>Mes 4</option>
+                </select>
+              </div>
+
+              {infoDirecta && (
+                <div>
+                  <label className="text-sm text-gray-600">
+                    Clases que impartí en el mes
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={clasesImpartidas}
+                    onChange={(e) =>
+                      setClasesImpartidas(Number(e.target.value))
+                    }
+                    className="mt-1 block w-40 rounded-xl border border-gray-300 px-4 py-2"
+                  />
+                </div>
+              )}
+            </div>
+          </section>
+
+          {errorDirecta && (
+            <p className="rounded-xl bg-red-50 p-4 text-red-600">
+              {errorDirecta}
+            </p>
+          )}
+
+          {avisoDirecta && (
+            <p className="rounded-xl bg-green-50 p-4 text-green-700">
+              {avisoDirecta}
+            </p>
+          )}
+
+          {asignaciones.length === 0 ? (
+            <div className="rounded-3xl border bg-white p-8 text-center text-gray-500">
+              No tienes materias asignadas en el ciclo activo.
+            </div>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-4">
+              {asignaciones.map((a) => (
+                <button
+                  key={a.id}
+                  onClick={() => abrirDirecta(a.id, mes)}
+                  className={`rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:border-blue-400 ${
+                    asignacionDirectaId === a.id ? "border-blue-500" : ""
+                  }`}
+                >
+                  <p className="font-semibold">{a.materia?.nombre}</p>
+                  <p className="text-xs text-gray-500">
+                    Grupo {a.grupo?.nombre} · {a.grupo?._count?.alumnos ?? 0}{" "}
+                    alumnos
+                  </p>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {cargandoDirecta && (
+            <p className="text-gray-500">Cargando captura mensual...</p>
+          )}
+
+          {infoDirecta && !cargandoDirecta && (
+            <>
+              <div className="flex justify-end">
+                <button
+                  onClick={marcarTodosCompletoDirecta}
+                  className="rounded-lg border px-3 py-1 text-xs hover:bg-gray-50"
+                >
+                  Marcar todos con asistencia completa
+                </button>
+              </div>
+
+              <div className="overflow-x-auto rounded-3xl border bg-white shadow-sm">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-gray-50 text-gray-600">
+                    <tr>
+                      <th className="px-4 py-3">Matrícula</th>
+                      <th className="px-4 py-3">Alumno</th>
+                      <th className="px-4 py-3 text-center">Asistencias</th>
+                      <th className="px-4 py-3 text-center">Faltas</th>
+                      <th className="px-4 py-3 text-center">Porcentaje</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {alumnosDirecta.map((a) => {
+                      const faltas = Math.max(
+                        clasesImpartidas - (a.asistencias || 0),
+                        0
+                      );
+                      const porcentaje =
+                        clasesImpartidas > 0
+                          ? ((a.asistencias / clasesImpartidas) * 100).toFixed(1)
+                          : null;
+
+                      return (
+                        <tr key={a.alumnoId} className="border-t">
+                          <td className="px-4 py-2">{a.matricula}</td>
+                          <td className="px-4 py-2">{a.nombre}</td>
+
+                          <td className="px-4 py-2 text-center">
+                            <input
+                              type="number"
+                              min={0}
+                              max={clasesImpartidas}
+                              value={a.asistencias}
+                              onChange={(e) =>
+                                marcarAsistenciaDirecta(
+                                  a.alumnoId,
+                                  Number(e.target.value)
+                                )
+                              }
+                              className="w-20 rounded-lg border border-gray-300 px-2 py-1 text-center"
+                            />
+                          </td>
+
+                          <td className="px-4 py-2 text-center text-gray-500">
+                            {faltas}
+                          </td>
+
+                          <td className="px-4 py-2 text-center text-gray-500">
+                            {porcentaje === null ? "—" : `${porcentaje}%`}
+                          </td>
+                        </tr>
+                      );
+                    })}
+
+                    {alumnosDirecta.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={5}
+                          className="px-4 py-6 text-center text-gray-500"
+                        >
+                          Este grupo no tiene alumnos activos.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <button
+                onClick={guardarDirecta}
+                disabled={guardandoDirecta || alumnosDirecta.length === 0}
+                className="w-full rounded-xl bg-blue-600 py-2 text-white transition hover:bg-blue-700 disabled:bg-gray-400"
+              >
+                {guardandoDirecta ? "Guardando..." : "Guardar captura mensual"}
+              </button>
+            </>
+          )}
+        </>
       )}
     </div>
   );

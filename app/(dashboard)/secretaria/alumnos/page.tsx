@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/config";
 import { notificar } from "@/lib/notificar";
+import { BuscadorAlumnos, type CampoBusqueda } from "@/components/BuscadorAlumnos";
+
+type Orden = "reciente" | "nombre" | "matricula";
 
 type Alumno = {
   id?: string;
@@ -47,8 +50,14 @@ export default function SecretariaAlumnosPage() {
   const [error, setError] =
     useState("");
 
-  const [search, setSearch] =
+  const [busqueda, setBusqueda] =
     useState("");
+
+  const [campo, setCampo] =
+    useState<CampoBusqueda>("apellido");
+
+  const [orden, setOrden] =
+    useState<Orden>("reciente");
 
   const [open, setOpen] =
     useState(false);
@@ -109,9 +118,13 @@ export default function SecretariaAlumnosPage() {
       const params = new URLSearchParams({
         page: String(page),
         perPage: "50",
+        orden,
       });
 
-      if (search.trim()) params.set("search", search.trim());
+      if (busqueda.trim()) {
+        params.set("search", busqueda.trim());
+        params.set("campo", campo);
+      }
 
       const res = await fetch(
         `${API_URL}/api/alumnos?${params.toString()}`,
@@ -169,10 +182,10 @@ export default function SecretariaAlumnosPage() {
 
   useEffect(() => {
     // Pequeño retraso para no disparar una consulta por tecla.
-    const t = setTimeout(fetchAlumnos, 300);
+    const t = setTimeout(fetchAlumnos, 400);
 
     return () => clearTimeout(t);
-  }, [page, search]);
+  }, [page, busqueda, campo, orden]);
 
   // Catálogos del formulario de alta.
   useEffect(() => {
@@ -285,26 +298,6 @@ ${response.passwordTemporal}
   };
 
   //////////////////////////////////////////////////////
-  // 🔥 FILTRO
-  //////////////////////////////////////////////////////
-
-  const filtrados = useMemo(() => {
-    return (alumnos ?? []).filter(
-      (a) => {
-        const texto = `
-          ${a?.user?.name ?? ""}
-          ${a?.user?.email ?? ""}
-          ${a?.matricula ?? ""}
-        `.toLowerCase();
-
-        return texto.includes(
-          search.toLowerCase()
-        );
-      }
-    );
-  }, [alumnos, search]);
-
-  //////////////////////////////////////////////////////
   // 🔥 LOADING
   //////////////////////////////////////////////////////
 
@@ -360,16 +353,32 @@ ${response.passwordTemporal}
 
       {/* SEARCH */}
       <section className="rounded-2xl bg-white p-6 shadow">
-        <input
-          type="text"
-          placeholder="Buscar alumno..."
-          value={search}
-          onChange={(e) =>
-            setSearch(e.target.value)
-          }
-          className="w-full rounded-xl border p-3 outline-none focus:border-blue-500"
-          onKeyDown={() => setPage(1)}
-        />
+        <BuscadorAlumnos
+          valor={busqueda}
+          campo={campo}
+          onValor={(v) => {
+            setBusqueda(v);
+            setPage(1);
+          }}
+          onCampo={(c) => {
+            setCampo(c);
+            setPage(1);
+          }}
+        >
+          <select
+            value={orden}
+            onChange={(e) => {
+              setOrden(e.target.value as Orden);
+              setPage(1);
+            }}
+            aria-label="Ordenar por"
+            className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+          >
+            <option value="reciente">Más recientes</option>
+            <option value="nombre">Apellido (A–Z)</option>
+            <option value="matricula">Matrícula</option>
+          </select>
+        </BuscadorAlumnos>
 
         <div className="mt-3 flex items-center justify-between text-sm text-gray-500">
           <span>
@@ -399,7 +408,7 @@ ${response.passwordTemporal}
       {/* TABLE */}
       <section className="rounded-2xl bg-white p-6 shadow">
 
-        {(filtrados ?? []).length ===
+        {(alumnos ?? []).length ===
         0 ? (
           <p className="text-gray-500">
             No hay alumnos registrados.
@@ -437,7 +446,7 @@ ${response.passwordTemporal}
               </thead>
 
               <tbody>
-                {(filtrados ?? []).map(
+                {(alumnos ?? []).map(
                   (a) => (
                     <tr
                       key={a?.id}

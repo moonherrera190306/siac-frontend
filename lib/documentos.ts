@@ -170,6 +170,7 @@ export function abrirRecibo(pago: any): boolean {
       <div class="folio">
         <span class="chico">FOLIO</span>
         <strong>${pago.folio ?? "—"}</strong>
+        ${pago.libro ? `<span class="chico">Libro ${pago.libro}</span>` : ""}
       </div>
     </header>
 
@@ -190,6 +191,7 @@ export function abrirRecibo(pago: any): boolean {
       }</dd></div>
       <div><dt>Forma de pago</dt><dd>${pago.metodo ?? "—"}</dd></div>
       ${pago.referencia ? `<div><dt>Referencia</dt><dd>${pago.referencia}</dd></div>` : ""}
+      ${pago.iniciales ? `<div><dt>Cajero</dt><dd>${pago.iniciales}</dd></div>` : ""}
     </dl>
 
     <table>

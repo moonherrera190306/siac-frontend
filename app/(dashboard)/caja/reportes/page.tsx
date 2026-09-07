@@ -56,15 +56,25 @@ export default function CajaReportesPage() {
           </p>
         </div>
 
-        <input
-          type="date"
-          value={fecha}
-          onChange={(e) => {
-            setFecha(e.target.value);
-            cargar(e.target.value);
-          }}
-          className="rounded-xl border border-gray-300 px-4 py-2"
-        />
+        <div className="flex items-center gap-3 print:hidden">
+          <input
+            type="date"
+            value={fecha}
+            onChange={(e) => {
+              setFecha(e.target.value);
+              cargar(e.target.value);
+            }}
+            className="rounded-xl border border-gray-300 px-4 py-2"
+          />
+
+          <button
+            onClick={() => window.print()}
+            disabled={!corte}
+            className="rounded-xl border border-slate-800 px-5 py-2 text-slate-800 disabled:border-gray-300 disabled:text-gray-400"
+          >
+            Imprimir corte
+          </button>
+        </div>
       </section>
 
       {error && (
@@ -135,6 +145,18 @@ export default function CajaReportesPage() {
           </p>
         </>
       )}
+
+      {/* Reglas de impresión: `style jsx` depende de styled-jsx, que no
+          está garantizado en el App Router. Un <style> plano siempre entra. */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `@media print {
+            nav, aside, header { display: none !important; }
+            body { background: #fff; }
+            main { margin: 0 !important; padding: 0 !important; }
+          }`,
+        }}
+      />
     </div>
   );
 }

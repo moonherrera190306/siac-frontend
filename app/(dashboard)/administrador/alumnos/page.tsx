@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/config";
 import { notificar } from "@/lib/notificar";
 import { PageHeader, Card, TableWrap, Badge, Button, Vacio, Modal } from "@/components/ui";
+import { BuscadorAlumnos, type CampoBusqueda } from "@/components/BuscadorAlumnos";
+
+type Orden = "reciente" | "nombre" | "matricula";
 
 const TONO_ESTATUS: Record<string, "bien" | "alerta" | "grave" | "info" | "neutro"> = {
   ACTIVO: "bien",
@@ -17,6 +20,8 @@ export default function AdministradorAlumnosPage() {
   const [meta, setMeta] = useState<any>({ total: 0, pages: 1 });
 
   const [busqueda, setBusqueda] = useState("");
+  const [campo, setCampo] = useState<CampoBusqueda>("apellido");
+  const [orden, setOrden] = useState<Orden>("reciente");
   const [page, setPage] = useState(1);
 
   const [detalle, setDetalle] = useState<any>(null);
@@ -29,9 +34,12 @@ export default function AdministradorAlumnosPage() {
     try {
       setLoading(true);
 
-      const params = new URLSearchParams({ page: String(page), perPage: "50" });
+      const params = new URLSearchParams({ page: String(page), perPage: "50", orden });
 
-      if (busqueda.trim()) params.set("search", busqueda.trim());
+      if (busqueda.trim()) {
+        params.set("search", busqueda.trim());
+        params.set("campo", campo);
+      }
 
       const res = await fetch(`${API_URL}/api/alumnos?${params}`, {
         credentials: "include",
@@ -51,9 +59,9 @@ export default function AdministradorAlumnosPage() {
   };
 
   useEffect(() => {
-    const t = setTimeout(cargar, 300);
+    const t = setTimeout(cargar, 400);
     return () => clearTimeout(t);
-  }, [page, busqueda]);
+  }, [page, busqueda, campo, orden]);
 
   const guardarEdicion = async () => {
     setGuardando(true);
@@ -130,15 +138,32 @@ export default function AdministradorAlumnosPage() {
       </PageHeader>
 
       <Card>
-        <input
-          className="w-full rounded-xl border border-slate-300 px-4 py-2"
-          placeholder="Buscar por nombre, matrícula, CURP o correo"
-          value={busqueda}
-          onChange={(e) => {
-            setBusqueda(e.target.value);
+        <BuscadorAlumnos
+          valor={busqueda}
+          campo={campo}
+          onValor={(v) => {
+            setBusqueda(v);
             setPage(1);
           }}
-        />
+          onCampo={(c) => {
+            setCampo(c);
+            setPage(1);
+          }}
+        >
+          <select
+            value={orden}
+            onChange={(e) => {
+              setOrden(e.target.value as Orden);
+              setPage(1);
+            }}
+            aria-label="Ordenar por"
+            className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+          >
+            <option value="reciente">Más recientes</option>
+            <option value="nombre">Apellido (A–Z)</option>
+            <option value="matricula">Matrícula</option>
+          </select>
+        </BuscadorAlumnos>
 
         <div className="mt-3 flex items-center justify-between text-sm text-slate-500">
           <span>

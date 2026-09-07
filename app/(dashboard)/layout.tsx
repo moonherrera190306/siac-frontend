@@ -107,6 +107,10 @@ export default function DashboardLayout({
         path: "/maestro/asistencia",
       },
       {
+        label: "Bitácora",
+        path: "/maestro/bitacora",
+      },
+      {
         label: "Calificaciones",
         path: "/maestro/calificaciones",
       },

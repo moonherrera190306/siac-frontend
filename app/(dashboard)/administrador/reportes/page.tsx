@@ -73,9 +73,9 @@ export default function AdministradorReportesPage() {
     cargar("riesgo");
   }, []);
 
-  const descargar = () => {
-    // El backend devuelve el CSV como descarga directa.
-    window.open(`${API_URL}/api/reportes/${activo}?formato=csv`, "_blank");
+  const descargar = (formato: "csv" | "pdf") => {
+    // El backend devuelve el archivo como descarga directa.
+    window.open(`${API_URL}/api/reportes/${activo}?formato=${formato}`, "_blank");
   };
 
   // Barra de magnitud: un solo tono, la longitud es el dato.
@@ -100,7 +100,8 @@ export default function AdministradorReportesPage() {
       <section className="rounded-2xl border bg-white p-6 shadow-sm">
         <h1 className="text-3xl font-bold">Reportes</h1>
         <p className="text-gray-500">
-          Datos del ciclo activo · descargables en CSV para Excel
+          Datos del ciclo activo · descargables en PDF para imprimir o en CSV
+          para Excel
         </p>
       </section>
 
@@ -165,13 +166,23 @@ export default function AdministradorReportesPage() {
               )}
             </div>
 
-            <button
-              onClick={descargar}
-              disabled={filas.length === 0}
-              className="rounded-xl bg-slate-800 px-5 py-2 text-white disabled:bg-gray-400"
-            >
-              Descargar CSV
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => descargar("pdf")}
+                disabled={filas.length === 0}
+                className="rounded-xl border border-slate-800 px-5 py-2 text-slate-800 disabled:border-gray-300 disabled:text-gray-400"
+              >
+                Descargar PDF
+              </button>
+
+              <button
+                onClick={() => descargar("csv")}
+                disabled={filas.length === 0}
+                className="rounded-xl bg-slate-800 px-5 py-2 text-white disabled:bg-gray-400"
+              >
+                Descargar CSV
+              </button>
+            </div>
           </section>
 
           {/* Comparación visual: una sola medida, un solo tono. */}

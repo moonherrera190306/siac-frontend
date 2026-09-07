@@ -2,10 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/config";
+import {
+  BuscadorAlumnos,
+  filtrarAlumnos,
+  type CampoBusqueda,
+} from "@/components/BuscadorAlumnos";
+
+type Orden = "reciente" | "nombre" | "matricula";
 
 export default function DirectorAlumnosPage() {
   const [alumnos, setAlumnos] = useState<any[]>([]);
-  const [search, setSearch] = useState("");
+  const [busqueda, setBusqueda] = useState("");
+  const [campo, setCampo] = useState<CampoBusqueda>("apellido");
+  const [orden, setOrden] = useState<Orden>("reciente");
   const [grupo, setGrupo] = useState("");
 
   useEffect(() => {
@@ -35,14 +44,22 @@ export default function DirectorAlumnosPage() {
   }, []);
 
   // 🔍 filtros
-  const filtrados = alumnos.filter((a) => {
-    const coincideTexto = a.nombre
-      .toLowerCase()
-      .includes(search.toLowerCase());
+  const filtrados = filtrarAlumnos(alumnos, busqueda, campo, (a) => ({
+    matricula: a.matricula,
+    nombre: a.nombre,
+  })).filter((a) => (grupo ? a.grupo === grupo : true));
 
-    const coincideGrupo = grupo ? a.grupo === grupo : true;
+  const ordenados = [...filtrados].sort((a, b) => {
+    if (orden === "nombre") {
+      return (a.nombre || "").localeCompare(b.nombre || "");
+    }
 
-    return coincideTexto && coincideGrupo;
+    if (orden === "matricula") {
+      return (a.matricula || "").localeCompare(b.matricula || "");
+    }
+
+    // "reciente" respeta el orden que entrega el servidor.
+    return 0;
   });
 
   // 🔥 grupos dinámicos
@@ -63,13 +80,23 @@ export default function DirectorAlumnosPage() {
         {/* 🔍 FILTROS */}
         <div className="flex flex-col md:flex-row gap-3 mb-4">
 
-          <input
-            type="text"
-            placeholder="Buscar alumno..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="border p-2 rounded w-full"
-          />
+          <BuscadorAlumnos
+            valor={busqueda}
+            campo={campo}
+            onValor={setBusqueda}
+            onCampo={setCampo}
+          >
+            <select
+              value={orden}
+              onChange={(e) => setOrden(e.target.value as Orden)}
+              aria-label="Ordenar por"
+              className="border p-2 rounded"
+            >
+              <option value="reciente">Más recientes</option>
+              <option value="nombre">Apellido (A–Z)</option>
+              <option value="matricula">Matrícula</option>
+            </select>
+          </BuscadorAlumnos>
 
           <select
             value={grupo}
@@ -98,7 +125,7 @@ export default function DirectorAlumnosPage() {
             </thead>
 
             <tbody>
-              {filtrados.map((a) => (
+              {ordenados.map((a) => (
                 <tr key={a.id} className="border-b">
 
                   <td className="font-medium">{a.nombre}</td>

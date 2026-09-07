@@ -3,6 +3,13 @@
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/config";
 import { abrirRecibo } from "@/lib/documentos";
+import {
+  BuscadorAlumnos,
+  filtrarAlumnos,
+  type CampoBusqueda,
+} from "@/components/BuscadorAlumnos";
+
+const LIBRO_STORAGE_KEY = "siac_libro_caja";
 
 const METODOS = ["EFECTIVO", "TRANSFERENCIA", "TARJETA", "DEPOSITO"];
 
@@ -19,11 +26,14 @@ export default function CajaCobrosPage() {
   const [conceptos, setConceptos] = useState<any[]>([]);
 
   const [busqueda, setBusqueda] = useState("");
+  const [campoBusqueda, setCampoBusqueda] = useState<CampoBusqueda>("matricula");
   const [alumnoId, setAlumnoId] = useState("");
   const [adeudos, setAdeudos] = useState<any[]>([]);
 
   const [metodo, setMetodo] = useState("EFECTIVO");
   const [referencia, setReferencia] = useState("");
+  const [libro, setLibro] = useState("");
+  const [iniciales, setIniciales] = useState("");
   const [lineas, setLineas] = useState<Linea[]>([]);
 
   const [loading, setLoading] = useState(true);
@@ -76,6 +86,13 @@ export default function CajaCobrosPage() {
     };
 
     cargar();
+
+    try {
+      const ultimoLibro = window.localStorage.getItem(LIBRO_STORAGE_KEY);
+      if (ultimoLibro) setLibro(ultimoLibro);
+    } catch {
+      // localStorage no disponible: se captura el libro manualmente.
+    }
   }, []);
 
   const seleccionar = async (id: string) => {
@@ -95,6 +112,41 @@ export default function CajaCobrosPage() {
     const json = await res.json();
 
     setAdeudos(json?.data?.adeudos ?? []);
+  };
+
+  const buscarPorLector = async (codigo: string) => {
+    setError("");
+
+    if (!codigo) return;
+
+    const res = await fetch(
+      `${API_URL}/api/alumnos/matricula/${encodeURIComponent(codigo)}`,
+      { credentials: "include" }
+    );
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      setError(json?.message || "No se encontró un alumno con esa matrícula");
+      return;
+    }
+
+    const alumno = json?.data;
+
+    if (!alumno) {
+      setError("No se encontró un alumno con esa matrícula");
+      return;
+    }
+
+    // El alumno escaneado puede no estar en la lista ya cargada
+    // (por ejemplo si hay más de 200 alumnos): se agrega para que
+    // el <select> pueda mostrarlo y quedar seleccionado.
+    setAlumnos((prev) =>
+      prev.some((a) => a.id === alumno.id) ? prev : [...prev, alumno]
+    );
+
+    await seleccionar(alumno.id);
+    setBusqueda("");
   };
 
   const agregarLinea = (concepto: any, adeudo?: any) => {
@@ -143,7 +195,14 @@ export default function CajaCobrosPage() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ alumnoId, metodo, referencia, conceptos: lineas }),
+        body: JSON.stringify({
+          alumnoId,
+          metodo,
+          referencia,
+          libro: libro.trim() || undefined,
+          iniciales: iniciales.trim() ? iniciales.trim().toUpperCase() : undefined,
+          conceptos: lineas,
+        }),
       });
 
       const json = await res.json();
@@ -156,6 +215,13 @@ export default function CajaCobrosPage() {
       setRecibo(json?.data ?? null);
       setLineas([]);
       setReferencia("");
+
+      try {
+        if (libro.trim()) window.localStorage.setItem(LIBRO_STORAGE_KEY, libro.trim());
+      } catch {
+        // localStorage no disponible: no afecta el cobro ya registrado.
+      }
+
       seleccionar(alumnoId);
     } catch {
       setError("Error de conexión con el servidor");
@@ -164,14 +230,10 @@ export default function CajaCobrosPage() {
     }
   };
 
-  const filtrados = alumnos.filter((a) => {
-    const t = busqueda.trim().toLowerCase();
-    if (!t) return true;
-    return (
-      (a.matricula || "").toLowerCase().includes(t) ||
-      (a.user?.name || "").toLowerCase().includes(t)
-    );
-  });
+  const filtrados = filtrarAlumnos(alumnos, busqueda, campoBusqueda, (a) => ({
+    matricula: a.matricula,
+    nombre: a.user?.name,
+  }));
 
   if (loading) return <p className="p-6">Cargando...</p>;
 
@@ -196,6 +258,8 @@ export default function CajaCobrosPage() {
 
           <p className="mt-1 text-sm text-green-700">
             Total cobrado: ${Number(recibo.total ?? 0).toFixed(2)}
+            {recibo.libro ? ` · Libro ${recibo.libro}` : ""}
+            {recibo.iniciales ? ` · ${recibo.iniciales}` : ""}
           </p>
 
           <ul className="mt-3 space-y-1 text-sm text-green-900">
@@ -232,15 +296,18 @@ export default function CajaCobrosPage() {
       <section className="rounded-3xl border bg-white p-5 shadow-sm">
         <h2 className="mb-3 font-semibold">Alumno</h2>
 
-        <input
-          className="mb-3 w-full rounded-xl border border-gray-300 px-4 py-2"
-          placeholder="Buscar por nombre o matrícula"
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
+        <BuscadorAlumnos
+          valor={busqueda}
+          campo={campoBusqueda}
+          onValor={setBusqueda}
+          onCampo={setCampoBusqueda}
+          onLector={buscarPorLector}
+          conLector
+          autoFocus
         />
 
         <select
-          className="w-full rounded-xl border border-gray-300 px-4 py-2"
+          className="mt-3 w-full rounded-xl border border-gray-300 px-4 py-2"
           value={alumnoId}
           onChange={(e) => seleccionar(e.target.value)}
         >
@@ -381,6 +448,22 @@ export default function CajaCobrosPage() {
           <div className="flex items-center justify-end text-xl font-bold">
             ${total.toFixed(2)}
           </div>
+        </div>
+
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <input
+            className="rounded-xl border border-gray-300 px-3 py-2"
+            placeholder="Libro (ej. L-12)"
+            value={libro}
+            onChange={(e) => setLibro(e.target.value)}
+          />
+
+          <input
+            className="rounded-xl border border-gray-300 px-3 py-2"
+            placeholder="Iniciales del cajero (opcional)"
+            value={iniciales}
+            onChange={(e) => setIniciales(e.target.value.toUpperCase())}
+          />
         </div>
 
         <button
