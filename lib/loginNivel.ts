@@ -16,15 +16,16 @@ export function guardarNivelLogin(nivel: Nivel) {
   } catch {}
 }
 
+/** Login del nivel recordado; sin nivel, la portada para elegir. */
 export function rutaLogin(): string {
   try {
-    return localStorage.getItem(CLAVE) === "UNIVERSIDAD"
-      ? "/login/universidad"
-      : "/login";
-  } catch {
-    return "/login";
-  }
+    const nivel = localStorage.getItem(CLAVE);
+    if (nivel === "UNIVERSIDAD") return "/login/universidad";
+    if (nivel === "PREPARATORIA") return "/login";
+  } catch {}
+  return "/";
 }
 
+/** Pantallas públicas: portada (/) y los dos logins. */
 export const esRutaLogin = (pathname: string | null) =>
-  pathname === "/login" || pathname === "/login/universidad";
+  pathname === "/" || pathname === "/login" || pathname === "/login/universidad";
