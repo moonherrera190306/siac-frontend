@@ -96,15 +96,15 @@ export default function LoginForm({ nivel, banner, pie, otroAcceso }: Props) {
       <div className="w-full max-w-[430px]">
         {/* El membrete oficial como encabezado: la misma identidad que
             el alumno ve en sus constancias. */}
-        <div className="overflow-hidden rounded-t-2xl bg-white">
+        {/* Emblema del nivel: el fondo coincide con el de la imagen. */}
+        <div className="flex justify-center overflow-hidden rounded-t-2xl bg-[#f7f7f7] px-6 pb-2 pt-6">
           <Image
             src={banner.src}
             alt={banner.alt}
             width={banner.width}
             height={banner.height}
             priority
-            unoptimized={banner.src.endsWith(".svg")}
-            className="h-auto w-full"
+            className="h-40 w-auto"
           />
         </div>
 
