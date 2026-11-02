@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/config";
 import { rutaLogin } from "@/lib/loginNivel";
+import { notificar } from "@/lib/notificar";
 
 export default function DashboardLayout({
   children,
@@ -91,6 +92,8 @@ export default function DashboardLayout({
         label: "Auditoría",
         path: "/administrador/auditoria",
       },
+      { separador: "Archivo" },
+      { label: "Archivo histórico ↗", path: "archivo-historico", archivo: true },
       // Pendientes: /administrador/grupos y /administrador/maestros no se
       // enlazan todavía porque no consumen datos reales del backend.
     ],
@@ -231,6 +234,9 @@ export default function DashboardLayout({
     label: "Reportes",
     path: "/director/reportes",
   },
+
+  { separador: "Archivo" },
+  { label: "Archivo histórico ↗", path: "archivo-historico", archivo: true },
 ],
 
     SECRETARIA: [
@@ -272,6 +278,9 @@ export default function DashboardLayout({
     label: "Constancias",
     path: "/secretaria/constancias",
   },
+
+  { separador: "Archivo" },
+  { label: "Archivo histórico ↗", path: "archivo-historico", archivo: true },
 ],
 
     CAJA: [
@@ -331,6 +340,29 @@ export default function DashboardLayout({
     .map((p: string) => p[0])
     .join("")
     .toUpperCase();
+
+  // 🗄️ Archivo histórico (app biblioteca): el backend firma un token de
+  // 60 s y se abre en otra pestaña ya con sesión.
+  const abrirArchivo = async () => {
+    // La pestaña se abre antes del fetch para que el navegador no la
+    // bloquee como ventana emergente.
+    const pestana = window.open("", "_blank");
+
+    try {
+      const res = await fetch(`${API_URL}/api/auth/sso-archivo`, {
+        credentials: "include",
+      });
+      const json = await res.json();
+
+      if (!res.ok || !json.url) throw new Error(json?.message);
+
+      if (pestana) pestana.location.href = json.url;
+      else window.location.href = json.url;
+    } catch (e: any) {
+      pestana?.close();
+      notificar(e?.message || "No se pudo abrir el Archivo histórico", "error");
+    }
+  };
 
   const logout = async () => {
     // 🔐 La cookie httpOnly solo la puede borrar el backend.
@@ -444,6 +476,15 @@ export default function DashboardLayout({
               >
                 {item.separador}
               </p>
+            ) : item.archivo ? (
+              <button
+                key={item.path}
+                type="button"
+                onClick={abrirArchivo}
+                className="siac-nav-item w-full text-left"
+              >
+                {item.label}
+              </button>
             ) : (
               <Link
                 key={item.path}

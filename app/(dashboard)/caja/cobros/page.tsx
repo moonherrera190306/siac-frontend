@@ -41,6 +41,56 @@ export default function CajaCobrosPage() {
   const [error, setError] = useState("");
   const [recibo, setRecibo] = useState<any>(null);
 
+  // 🗄️ Exalumnos: se buscan en el Archivo histórico (biblioteca).
+  const [modo, setModo] = useState<"alumno" | "exalumno">("alumno");
+  const [exQuery, setExQuery] = useState("");
+  const [exResultados, setExResultados] = useState<any[]>([]);
+  const [exBuscando, setExBuscando] = useState(false);
+  const [exalumno, setExalumno] = useState<any>(null);
+
+  const cambiarModo = (m: "alumno" | "exalumno") => {
+    setModo(m);
+    setError("");
+    setRecibo(null);
+    setLineas([]);
+    setAlumnoId("");
+    setAdeudos([]);
+    setExalumno(null);
+    setExResultados([]);
+  };
+
+  const buscarExalumnos = async () => {
+    const q = exQuery.trim();
+    setError("");
+
+    if (q.length < 2) {
+      setError("Escribe al menos 2 letras del nombre o la matrícula");
+      return;
+    }
+
+    try {
+      setExBuscando(true);
+
+      const res = await fetch(
+        `${API_URL}/api/pagos/exalumnos?q=${encodeURIComponent(q)}`,
+        { credentials: "include" }
+      );
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json?.message || "No se pudo buscar en el archivo");
+
+      setExResultados(json?.data ?? []);
+
+      if ((json?.data ?? []).length === 0) {
+        setError("No se encontró ningún exalumno con ese nombre o matrícula");
+      }
+    } catch (e: any) {
+      setError(e.message || "Error al buscar en el Archivo histórico");
+    } finally {
+      setExBuscando(false);
+    }
+  };
+
   useEffect(() => {
     const cargar = async () => {
       try {
@@ -178,8 +228,13 @@ export default function CajaCobrosPage() {
   const cobrar = async () => {
     setError("");
 
-    if (!alumnoId) {
+    if (modo === "alumno" && !alumnoId) {
       setError("Selecciona un alumno");
+      return;
+    }
+
+    if (modo === "exalumno" && !exalumno) {
+      setError("Selecciona un exalumno");
       return;
     }
 
@@ -196,7 +251,7 @@ export default function CajaCobrosPage() {
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          alumnoId,
+          ...(modo === "alumno" ? { alumnoId } : { exalumnoId: exalumno.id }),
           metodo,
           referencia,
           libro: libro.trim() || undefined,
@@ -222,7 +277,7 @@ export default function CajaCobrosPage() {
         // localStorage no disponible: no afecta el cobro ya registrado.
       }
 
-      seleccionar(alumnoId);
+      if (modo === "alumno") seleccionar(alumnoId);
     } catch {
       setError("Error de conexión con el servidor");
     } finally {
@@ -294,8 +349,92 @@ export default function CajaCobrosPage() {
       )}
 
       <section className="rounded-3xl border bg-white p-5 shadow-sm">
-        <h2 className="mb-3 font-semibold">Alumno</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold">
+            {modo === "alumno" ? "Alumno" : "Exalumno (Archivo histórico)"}
+          </h2>
 
+          <div className="flex rounded-xl border border-gray-300 p-0.5 text-sm">
+            {(["alumno", "exalumno"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => cambiarModo(m)}
+                className={
+                  "rounded-lg px-3 py-1 " +
+                  (modo === m ? "bg-[#00253f] text-white" : "text-gray-600")
+                }
+              >
+                {m === "alumno" ? "Alumno activo" : "Exalumno"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {modo === "exalumno" ? (
+          <div>
+            <div className="flex flex-col gap-2 md:flex-row">
+              <input
+                value={exQuery}
+                onChange={(e) => setExQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && buscarExalumnos()}
+                placeholder="Nombre o matrícula del exalumno"
+                className="w-full rounded-xl border border-gray-300 px-4 py-2 text-sm md:w-96"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={buscarExalumnos}
+                disabled={exBuscando}
+                className="rounded-xl bg-[#00253f] px-4 py-2 text-sm text-white disabled:opacity-60"
+              >
+                {exBuscando ? "Buscando…" : "Buscar"}
+              </button>
+            </div>
+
+            {exalumno ? (
+              <div className="mt-3 flex items-center justify-between rounded-2xl bg-slate-50 p-4 text-sm">
+                <div>
+                  <p className="font-semibold">{exalumno.nombre}</p>
+                  <p className="text-gray-500">
+                    {exalumno.matricula}
+                    {exalumno.generacion ? ` · Generación ${exalumno.generacion}` : ""}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setExalumno(null)}
+                  className="rounded-lg border px-3 py-1 text-xs"
+                >
+                  Cambiar
+                </button>
+              </div>
+            ) : (
+              exResultados.length > 0 && (
+                <ul className="mt-3 divide-y rounded-2xl border text-sm">
+                  {exResultados.map((x) => (
+                    <li key={x.id} className="flex items-center justify-between px-4 py-2">
+                      <span>
+                        {x.matricula} — {x.nombre}
+                        {x.generacion && (
+                          <span className="ml-2 text-xs text-gray-500">({x.generacion})</span>
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setExalumno(x)}
+                        className="rounded-lg border border-[#00253f] px-3 py-1 text-xs text-[#00253f]"
+                      >
+                        Elegir
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )
+            )}
+          </div>
+        ) : (
+        <>
         <BuscadorAlumnos
           valor={busqueda}
           campo={campoBusqueda}
@@ -353,6 +492,8 @@ export default function CajaCobrosPage() {
           <p className="mt-3 text-sm text-gray-500">
             Este alumno no tiene adeudos registrados.
           </p>
+        )}
+        </>
         )}
       </section>
 
@@ -468,7 +609,7 @@ export default function CajaCobrosPage() {
 
         <button
           onClick={cobrar}
-          disabled={cobrando || lineas.length === 0 || !alumnoId}
+          disabled={cobrando || lineas.length === 0 || (modo === "alumno" ? !alumnoId : !exalumno)}
           className="mt-4 w-full rounded-xl bg-blue-600 py-3 text-white transition hover:bg-blue-700 disabled:bg-gray-400"
         >
           {cobrando ? "Cobrando..." : "Cobrar y generar recibo"}

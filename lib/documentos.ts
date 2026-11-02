@@ -337,7 +337,13 @@ function abrirVentana(titulo: string, cuerpo: string, estilos: string) {
    🧾 RECIBO DE PAGO
 ========================================= */
 export function abrirRecibo(pago: any): boolean {
-  const alumno = pago.alumno ?? {};
+  // Pagos de exalumnos: el backend ya manda un `alumno` virtual, pero
+  // por si el recibo se arma con el pago "crudo" recién creado.
+  const alumno =
+    pago.alumno ??
+    (pago.exalumnoNombre
+      ? { matricula: pago.exalumnoMatricula, user: { name: `${pago.exalumnoNombre} (exalumno)` } }
+      : {});
 
   const detalles = pago.detalles ?? [];
 

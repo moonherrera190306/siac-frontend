@@ -129,7 +129,10 @@ const MIN_LARGO_CODIGO = 4;
 
 function useLectorGlobal(onCodigo?: (codigo: string) => void) {
   const callback = useRef(onCodigo);
-  callback.current = onCodigo;
+
+  useEffect(() => {
+    callback.current = onCodigo;
+  }, [onCodigo]);
 
   const activo = Boolean(onCodigo);
 
