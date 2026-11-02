@@ -65,7 +65,7 @@ export default function Home() {
   return (
     <div className="siac-fondo-marino flex min-h-screen flex-col items-center justify-center p-4">
       <div className="mb-8 text-center">
-        <h1 className="text-3xl font-bold tracking-[0.18em] text-white">SIAC</h1>
+        <h1 className="text-3xl font-bold tracking-[0.18em] !text-white">SIAC</h1>
         <p className="mt-1 text-sm text-white/70">
           Centro de Estudios Superiores de Zamora
         </p>
