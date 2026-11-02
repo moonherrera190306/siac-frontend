@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/config";
+import { rutaLogin } from "@/lib/loginNivel";
 
 export default function DashboardLayout({
   children,
@@ -26,7 +27,7 @@ export default function DashboardLayout({
     const guardado = localStorage.getItem("user");
 
     if (!guardado) {
-      router.push("/login");
+      router.push(rutaLogin());
       return;
     }
 
@@ -51,7 +52,7 @@ export default function DashboardLayout({
       })
       .catch(() => {
         localStorage.removeItem("user");
-        router.push("/login");
+        router.push(rutaLogin());
       });
   }, [pathname]);
 
@@ -344,7 +345,7 @@ export default function DashboardLayout({
 
     localStorage.removeItem("user");
 
-    router.push("/login");
+    router.push(rutaLogin());
   };
 
   return (

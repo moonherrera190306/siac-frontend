@@ -12,6 +12,8 @@ import { useEffect, useRef, useState } from "react";
  *
  * `conLector` activa el modo pistola de código de barras: el lector
  * teclea la matrícula y manda Enter, y ese Enter dispara `onLector`.
+ * Además queda escuchando en toda la pantalla: se puede escanear sin
+ * dar clic al cuadro ni elegir "Matrícula" (ver `useLectorGlobal`).
  *
  * El componente es controlado: cada pantalla decide si filtra en memoria
  * o vuelve a pedirle la lista al backend con `?campo=&search=`.
@@ -46,6 +48,8 @@ export function BuscadorAlumnos({
 }) {
   const input = useRef<HTMLInputElement>(null);
 
+  useLectorGlobal(conLector ? onLector : undefined);
+
   // El lector escribe muy rápido: si el foco se pierde, el código se
   // pierde con él. Por eso en modo lector el cuadro se enfoca solo.
   useEffect(() => {
@@ -75,6 +79,7 @@ export function BuscadorAlumnos({
 
       <input
         ref={input}
+        data-lector={conLector ? "" : undefined}
         value={valor}
         onChange={(e) => onValor(e.target.value)}
         onKeyDown={(e) => {
@@ -106,6 +111,80 @@ export function BuscadorAlumnos({
       {children}
     </div>
   );
+}
+
+/**
+ * 🔫 LECTOR SIEMPRE ACTIVO
+ *
+ * La pistola "teclea" muy rápido (pocos ms entre teclas) y termina con
+ * Enter. Una persona no escribe así. Con esa diferencia se detecta el
+ * escaneo aunque el foco esté en un botón, el <select> o en ningún lado.
+ *
+ * Si el foco está en otro campo de texto (montos, referencia…) no se
+ * intercepta: ahí la persona está escribiendo. El cuadro del buscador
+ * (`data-lector`) sí se intercepta, para escanear sin importar el campo.
+ */
+const MAX_MS_ENTRE_TECLAS = 50;
+const MIN_LARGO_CODIGO = 4;
+
+function useLectorGlobal(onCodigo?: (codigo: string) => void) {
+  const callback = useRef(onCodigo);
+  callback.current = onCodigo;
+
+  const activo = Boolean(onCodigo);
+
+  useEffect(() => {
+    if (!activo) return;
+
+    let buffer = "";
+    let ultima = 0;
+
+    const escribiendoEnOtroCampo = (el: Element | null) => {
+      if (!(el instanceof HTMLElement)) return false;
+      if (el.hasAttribute("data-lector")) return false;
+      if (el.isContentEditable) return true;
+      if (el instanceof HTMLTextAreaElement) return true;
+      if (el instanceof HTMLInputElement) {
+        return !["button", "checkbox", "radio", "submit", "reset"].includes(el.type);
+      }
+      return false;
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      if (escribiendoEnOtroCampo(document.activeElement)) return;
+
+      const ahora = performance.now();
+      const rapido = ahora - ultima <= MAX_MS_ENTRE_TECLAS;
+      ultima = ahora;
+
+      if (e.key === "Enter") {
+        const codigo = buffer.trim();
+        buffer = "";
+
+        if (rapido && codigo.length >= MIN_LARGO_CODIGO) {
+          e.preventDefault();
+          e.stopPropagation();
+          callback.current?.(codigo);
+        }
+        return;
+      }
+
+      if (e.key.length !== 1) return;
+
+      buffer = rapido ? buffer + e.key : e.key;
+
+      // En un <select> o botón, las teclas del escaneo cambiarían la
+      // opción elegida: se absorben mientras dura la ráfaga.
+      if (rapido && !(document.activeElement instanceof HTMLInputElement)) {
+        e.preventDefault();
+      }
+    };
+
+    // Fase de captura: se adelanta al onKeyDown del propio cuadro.
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [activo]);
 }
 
 /**

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { rutaLogin } from "@/lib/loginNivel";
 
 /**
  * Ruta raíz: manda a cada usuario a su propio dashboard según su rol.
@@ -25,7 +26,7 @@ export default function Home() {
     const guardado = localStorage.getItem("user");
 
     if (!guardado) {
-      router.replace("/login");
+      router.replace(rutaLogin());
       return;
     }
 
@@ -42,7 +43,7 @@ export default function Home() {
     if (!destino) {
       // Sesión corrupta o rol desconocido: se limpia y se vuelve al login.
       localStorage.removeItem("user");
-      router.replace("/login");
+      router.replace(rutaLogin());
       return;
     }
 

@@ -1,4 +1,5 @@
 import { API_URL } from "./config";
+import { rutaLogin } from "@/lib/loginNivel";
 
 /**
  * 🔐 La sesión viaja en una cookie httpOnly.
@@ -26,7 +27,7 @@ export async function apiFetch(
     if (typeof window !== "undefined") {
       localStorage.removeItem("user");
 
-      window.location.href = "/login";
+      window.location.href = rutaLogin();
     }
 
     throw new Error("Sesión expirada");

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/config";
 import { abrirRecibo } from "@/lib/documentos";
+import { rutaLogin } from "@/lib/loginNivel";
 
 export default function AlumnoPagosPage() {
   const [pagos, setPagos] = useState<any[]>([]);
@@ -18,7 +19,7 @@ export default function AlumnoPagosPage() {
         const guardado = localStorage.getItem("user");
 
         if (!guardado) {
-          window.location.href = "/login";
+          window.location.href = rutaLogin();
           return;
         }
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/config";
+import { rutaLogin } from "@/lib/loginNivel";
 
 const DIAS = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO"];
 
@@ -34,7 +35,7 @@ export default function AlumnoHorarioPage() {
         const guardado = localStorage.getItem("user");
 
         if (!guardado) {
-          window.location.href = "/login";
+          window.location.href = rutaLogin();
           return;
         }
 

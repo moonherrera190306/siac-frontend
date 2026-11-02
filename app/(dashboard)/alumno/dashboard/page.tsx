@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/config";
 import { PageHeader, Card, Stat, Badge, Vacio, Button } from "@/components/ui";
 import { dinero } from "@/lib/format";
+import { rutaLogin } from "@/lib/loginNivel";
 
 const DIAS = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO"];
 
@@ -37,7 +38,7 @@ export default function AlumnoDashboardPage() {
         const guardado = localStorage.getItem("user");
 
         if (!guardado) {
-          window.location.href = "/login";
+          window.location.href = rutaLogin();
           return;
         }
 

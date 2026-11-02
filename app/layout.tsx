@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { rutaLogin, esRutaLogin } from "@/lib/loginNivel";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,12 +33,12 @@ export default function RootLayout({
     const guardado = localStorage.getItem("user");
 
     // 🔒 Si NO hay sesión → mandar a login
-    if (!guardado && pathname !== "/login") {
-      router.push("/login");
+    if (!guardado && !esRutaLogin(pathname)) {
+      router.push(rutaLogin());
     }
 
     // 🔓 Si ya hay sesión y está en login → mandar a dashboard
-    if (guardado && pathname === "/login") {
+    if (guardado && esRutaLogin(pathname)) {
       const user = JSON.parse(guardado);
 
       const roleRoutes: any = {
@@ -49,7 +50,7 @@ export default function RootLayout({
   SECRETARIA: "/secretaria/dashboard",
 };
 
-      router.push(roleRoutes[user.role] || "/login");
+      router.push(roleRoutes[user.role] || rutaLogin());
     }
 
     setLoading(false);
