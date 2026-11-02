@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/config";
+import { imprimirListadoGrupo } from "@/lib/listados";
 
 const ETIQUETA: Record<string, string> = {
   LUNES: "Lun",
@@ -160,6 +161,15 @@ export default function MaestroGruposPage() {
               >
                 Calificaciones
               </a>
+
+              {a.grupo?.id && (
+                <button
+                  onClick={() => imprimirListadoGrupo(a.grupo!.id!)}
+                  className="flex-1 rounded-xl border px-3 py-2 text-center text-sm hover:bg-gray-50"
+                >
+                  Lista
+                </button>
+              )}
             </div>
           </section>
         ))}

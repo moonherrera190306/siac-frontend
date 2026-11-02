@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/config";
+import { HorarioGrupo, imprimirHorarioGrupo } from "@/components/HorarioGrupo";
 
 const ETIQUETA: Record<string, string> = {
   LUNES: "Lunes",
@@ -133,50 +134,33 @@ export default function SecretariaHorariosPage() {
 
       {seleccionado && !cargandoDetalle && (
         <section className="rounded-2xl border bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-bold">
-            Horario del grupo {seleccionado.nombre}
-          </h2>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-xl font-bold">
+              Horario del grupo {seleccionado.nombre}
+            </h2>
 
-          {bloques.length === 0 ? (
-            <p className="mt-3 text-gray-500">
-              Este grupo todavía no tiene horarios capturados.
-            </p>
-          ) : (
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-gray-50 text-gray-600">
-                  <tr>
-                    <th className="px-4 py-3">Día</th>
-                    <th className="px-4 py-3">Horario</th>
-                    <th className="px-4 py-3">Materia</th>
-                    <th className="px-4 py-3">Docente</th>
-                    <th className="px-4 py-3">Aula</th>
-                  </tr>
-                </thead>
+            {bloques.length > 0 && (
+              <button
+                onClick={() =>
+                  imprimirHorarioGrupo(
+                    {
+                      nombre: seleccionado.nombre,
+                      turno: seleccionado.turno?.nombre,
+                      semestre: seleccionado.semestre?.nombre,
+                    },
+                    bloques
+                  ) || setError("Permite ventanas emergentes para imprimir")
+                }
+                className="rounded-xl bg-[#00253f] px-4 py-2 text-sm text-white"
+              >
+                Imprimir horario
+              </button>
+            )}
+          </div>
 
-                <tbody>
-                  {bloques
-                    .sort(
-                      (a, b) =>
-                        Object.keys(ETIQUETA).indexOf(a.dia) -
-                          Object.keys(ETIQUETA).indexOf(b.dia) ||
-                        a.horaInicio.localeCompare(b.horaInicio)
-                    )
-                    .map((b, i) => (
-                      <tr key={i} className="border-t">
-                        <td className="px-4 py-3">{ETIQUETA[b.dia] || b.dia}</td>
-                        <td className="px-4 py-3">
-                          {b.horaInicio} - {b.horaFin}
-                        </td>
-                        <td className="px-4 py-3">{b.materia}</td>
-                        <td className="px-4 py-3">{b.docente || "—"}</td>
-                        <td className="px-4 py-3">{b.aula || "—"}</td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <div className="mt-4">
+            <HorarioGrupo bloques={bloques} />
+          </div>
         </section>
       )}
     </div>

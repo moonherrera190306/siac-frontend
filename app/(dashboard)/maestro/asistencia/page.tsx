@@ -20,7 +20,7 @@ function hoy() {
 export default function MaestroAsistenciaPage() {
   // "lista" = pasar lista sesión por sesión (lo que ya existía).
   // "directa" = captura mensual por número de clases impartidas.
-  const [pestana, setPestana] = useState<"lista" | "directa">("lista");
+  const [pestana, setPestana] = useState<"lista" | "directa">("directa");
 
   const [asignaciones, setAsignaciones] = useState<any[]>([]);
   const [asignacionId, setAsignacionId] = useState("");
@@ -289,22 +289,12 @@ export default function MaestroAsistenciaPage() {
       <section className="rounded-3xl border bg-white p-6 shadow-sm">
         <h1 className="text-3xl font-bold">Asistencia</h1>
         <p className="text-gray-500">
-          Pasa lista y registra la bitácora de la clase en la misma pantalla.
+          Captura la asistencia mensual de cada alumno: total de clases del
+          mes y cuántas asistió cada quien.
         </p>
       </section>
 
       <div className="flex gap-2">
-        <button
-          onClick={() => setPestana("lista")}
-          className={`rounded-xl px-4 py-2 text-sm font-medium ${
-            pestana === "lista"
-              ? "bg-slate-900 text-white"
-              : "border bg-white hover:bg-gray-50"
-          }`}
-        >
-          Pasar lista
-        </button>
-
         <button
           onClick={() => setPestana("directa")}
           className={`rounded-xl px-4 py-2 text-sm font-medium ${
@@ -313,8 +303,20 @@ export default function MaestroAsistenciaPage() {
               : "border bg-white hover:bg-gray-50"
           }`}
         >
-          Por número de clases
+          Asistencia mensual
         </button>
+
+        <button
+          onClick={() => setPestana("lista")}
+          className={`rounded-xl px-4 py-2 text-sm font-medium ${
+            pestana === "lista"
+              ? "bg-slate-900 text-white"
+              : "border bg-white hover:bg-gray-50"
+          }`}
+        >
+          Pase diario y bitácora
+        </button>
+
       </div>
 
       {pestana === "lista" && (
@@ -590,22 +592,6 @@ export default function MaestroAsistenciaPage() {
                 </select>
               </div>
 
-              {infoDirecta && (
-                <div>
-                  <label className="text-sm text-gray-600">
-                    Clases que impartí en el mes
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={clasesImpartidas}
-                    onChange={(e) =>
-                      setClasesImpartidas(Number(e.target.value))
-                    }
-                    className="mt-1 block w-40 rounded-xl border border-gray-300 px-4 py-2"
-                  />
-                </div>
-              )}
             </div>
           </section>
 
@@ -651,6 +637,48 @@ export default function MaestroAsistenciaPage() {
 
           {infoDirecta && !cargandoDirecta && (
             <>
+              {/* 📦 Recuadro de totales: el total del mes manda sobre cada alumno. */}
+              <section className="grid gap-3 rounded-3xl border-2 border-[#00253f] bg-white p-5 shadow-sm md:grid-cols-4">
+                <div className="md:col-span-2">
+                  <p className="text-sm font-medium text-gray-600">
+                    {infoDirecta.materia} · Grupo {infoDirecta.grupo} · Mes {mes}
+                  </p>
+                  <label className="mt-2 block text-xs uppercase tracking-wide text-gray-500">
+                    Total de clases del mes
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={clasesImpartidas}
+                    onChange={(e) => setClasesImpartidas(Math.max(0, Number(e.target.value)))}
+                    className="mt-1 w-40 rounded-xl border-2 border-[#00253f] px-4 py-2 text-3xl font-bold text-[#00253f]"
+                  />
+                </div>
+
+                <div className="rounded-2xl bg-slate-50 p-3 text-center">
+                  <p className="text-xs uppercase tracking-wide text-gray-500">Asistencia promedio</p>
+                  <p className="mt-1 text-3xl font-bold text-slate-800">
+                    {clasesImpartidas > 0 && alumnosDirecta.length > 0
+                      ? `${(
+                          (alumnosDirecta.reduce((t, a) => t + Math.min(a.asistencias || 0, clasesImpartidas), 0) /
+                            (clasesImpartidas * alumnosDirecta.length)) *
+                          100
+                        ).toFixed(1)}%`
+                      : "—"}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl bg-amber-50 p-3 text-center">
+                  <p className="text-xs uppercase tracking-wide text-amber-700">Bajo 80%</p>
+                  <p className="mt-1 text-3xl font-bold text-amber-800">
+                    {clasesImpartidas > 0
+                      ? alumnosDirecta.filter((a) => (a.asistencias || 0) / clasesImpartidas < 0.8).length
+                      : 0}
+                    <span className="text-base font-normal"> / {alumnosDirecta.length}</span>
+                  </p>
+                </div>
+              </section>
+
               <div className="flex justify-end">
                 <button
                   onClick={marcarTodosCompletoDirecta}

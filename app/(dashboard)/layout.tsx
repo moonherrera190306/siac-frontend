@@ -186,6 +186,11 @@ export default function DashboardLayout({
   },
 
   {
+    label: "Captura de calificaciones",
+    path: "/director/captura",
+  },
+
+  {
     label: "Grupos",
     path: "/director/grupos",
   },

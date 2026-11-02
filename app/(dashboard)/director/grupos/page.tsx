@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/config";
 import { notificar } from "@/lib/notificar";
+import { imprimirListadoGrupo } from "@/lib/listados";
 
 export default function DirectorGruposPage() {
 
@@ -387,6 +388,10 @@ export default function DirectorGruposPage() {
                       Semestre
                     </th>
 
+                    <th className="text-left p-3">
+                      Listado
+                    </th>
+
                   </tr>
 
                 </thead>
@@ -418,6 +423,15 @@ export default function DirectorGruposPage() {
                             g?.semestre?.nombre ||
                             "-"
                           }
+                        </td>
+
+                        <td className="p-3">
+                          <button
+                            onClick={() => imprimirListadoGrupo(g.id)}
+                            className="rounded-lg border px-3 py-1 text-xs hover:bg-gray-50"
+                          >
+                            Imprimir alumnos
+                          </button>
                         </td>
 
                       </tr>

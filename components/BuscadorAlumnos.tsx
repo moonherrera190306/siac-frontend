@@ -19,7 +19,7 @@ import { useEffect, useRef, useState } from "react";
  * o vuelve a pedirle la lista al backend con `?campo=&search=`.
  */
 
-export type CampoBusqueda = "todos" | "apellido" | "matricula";
+export type CampoBusqueda = "todos" | "nombre" | "apellido" | "matricula";
 
 export function BuscadorAlumnos({
   valor,
@@ -58,6 +58,7 @@ export function BuscadorAlumnos({
 
   const textoPorCampo: Record<CampoBusqueda, string> = {
     todos: "Nombre, matrícula, CURP o correo",
+    nombre: "Nombre(s) del alumno",
     apellido: "Apellido del alumno",
     matricula: conLector
       ? "Escanea la credencial o teclea la matrícula"
@@ -72,6 +73,7 @@ export function BuscadorAlumnos({
         aria-label="Buscar por"
         className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
       >
+        <option value="nombre">Nombre</option>
         <option value="apellido">Apellido</option>
         <option value="matricula">Matrícula</option>
         <option value="todos">Todo</option>
@@ -212,12 +214,20 @@ export function filtrarAlumnos<T extends any>(
 
     if (campo === "matricula") return mat.includes(t);
 
-    // El nombre completo viene en un solo campo: buscar el apellido
-    // dentro de la cadena funciona en cualquiera de los dos órdenes.
-    if (campo === "apellido") return nom.includes(t);
+    // El nombre completo viene en un solo campo: cada palabra escrita
+    // debe aparecer, en cualquier orden ("perez juan" = "Juan Pérez").
+    const palabras = sinAcentos(t).split(/\s+/).filter(Boolean);
+    const nomPlano = sinAcentos(nom);
+    const coincideNombre = palabras.every((p) => nomPlano.includes(p));
+
+    if (campo === "apellido" || campo === "nombre") return coincideNombre;
 
     return (
-      mat.includes(t) || nom.includes(t) || (extra || "").toLowerCase().includes(t)
+      mat.includes(t) || coincideNombre || (extra || "").toLowerCase().includes(t)
     );
   });
+}
+
+function sinAcentos(t: string) {
+  return t.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }

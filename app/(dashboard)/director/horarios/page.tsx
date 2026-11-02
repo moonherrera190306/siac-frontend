@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/config";
+import { HorarioGrupo, imprimirHorarioGrupo } from "@/components/HorarioGrupo";
 
 const DIAS = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO"];
 
@@ -107,6 +108,7 @@ export default function DirectorHorariosPage() {
   };
 
   const asignacionesDelGrupo = asignaciones.filter((a) => a.grupoId === grupoId);
+  const grupoActual = grupos.find((g) => g.id === grupoId);
 
   const agregar = async () => {
     setError("");
@@ -203,6 +205,34 @@ export default function DirectorHorariosPage() {
 
       {grupoId && !cargandoGrupo && (
         <>
+          <section className="rounded-2xl border bg-white p-5 shadow-sm">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-semibold">
+                Horario del grupo {grupoActual?.nombre}
+              </h2>
+
+              {bloques.length > 0 && (
+                <button
+                  onClick={() =>
+                    imprimirHorarioGrupo(
+                      {
+                        nombre: grupoActual?.nombre,
+                        turno: grupoActual?.turno?.nombre,
+                        semestre: grupoActual?.semestre?.nombre,
+                      },
+                      bloques
+                    ) || setError("Permite ventanas emergentes para imprimir")
+                  }
+                  className="rounded-xl bg-[#00253f] px-4 py-2 text-sm text-white"
+                >
+                  Imprimir horario
+                </button>
+              )}
+            </div>
+
+            <HorarioGrupo bloques={bloques} />
+          </section>
+
           <section className="rounded-2xl border bg-white p-5 shadow-sm">
             <h2 className="mb-3 font-semibold">Agregar bloque</h2>
 
