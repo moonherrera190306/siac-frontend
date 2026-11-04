@@ -191,6 +191,11 @@ export default function DashboardLayout({
   },
 
   {
+    label: "Asistencia docente",
+    path: "/director/asistencia-docente",
+  },
+
+  {
     label: "Grupos",
     path: "/director/grupos",
   },
