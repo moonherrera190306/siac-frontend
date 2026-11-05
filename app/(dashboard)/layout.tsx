@@ -93,7 +93,8 @@ export default function DashboardLayout({
         path: "/administrador/auditoria",
       },
       { separador: "Archivo" },
-      { label: "Archivo histórico ↗", path: "archivo-historico", archivo: true },
+      { label: "Archivo histórico", path: "/archivo" },
+      { label: "Abrir archivo completo ↗", path: "archivo-historico", archivo: true },
       // Pendientes: /administrador/grupos y /administrador/maestros no se
       // enlazan todavía porque no consumen datos reales del backend.
     ],
@@ -246,7 +247,8 @@ export default function DashboardLayout({
   },
 
   { separador: "Archivo" },
-  { label: "Archivo histórico ↗", path: "archivo-historico", archivo: true },
+  { label: "Archivo histórico", path: "/archivo" },
+  { label: "Abrir archivo completo ↗", path: "archivo-historico", archivo: true },
 ],
 
     SECRETARIA: [
@@ -290,7 +292,8 @@ export default function DashboardLayout({
   },
 
   { separador: "Archivo" },
-  { label: "Archivo histórico ↗", path: "archivo-historico", archivo: true },
+  { label: "Archivo histórico", path: "/archivo" },
+  { label: "Abrir archivo completo ↗", path: "archivo-historico", archivo: true },
 ],
 
     CAJA: [

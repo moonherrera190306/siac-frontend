@@ -26,7 +26,7 @@ export default function CajaCobrosPage() {
   const [conceptos, setConceptos] = useState<any[]>([]);
 
   const [busqueda, setBusqueda] = useState("");
-  const [campoBusqueda, setCampoBusqueda] = useState<CampoBusqueda>("matricula");
+  const [campoBusqueda, setCampoBusqueda] = useState<CampoBusqueda>("todos");
   const [alumnoId, setAlumnoId] = useState("");
   const [adeudos, setAdeudos] = useState<any[]>([]);
 

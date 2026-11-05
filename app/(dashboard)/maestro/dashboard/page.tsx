@@ -59,7 +59,17 @@ export default function MaestroDashboardPage() {
           );
         }
 
-        setGrupos(gruposData.data || []);
+        // /grupos regresa asignaciones (grupo + materia): se agrupan por grupo.
+        const porGrupo = new Map<string, any>();
+        for (const a of gruposData.data || []) {
+          if (!a.grupo || porGrupo.has(a.grupo.id)) continue;
+          porGrupo.set(a.grupo.id, {
+            id: a.grupo.id,
+            nombre: [a.grupo.nombre, a.grupo.semestre?.nombre, a.grupo.turno?.nombre].filter(Boolean).join(" · "),
+            totalAlumnos: a.grupo._count?.alumnos ?? 0,
+          });
+        }
+        setGrupos([...porGrupo.values()]);
 
       } catch (err: any) {
         console.error(

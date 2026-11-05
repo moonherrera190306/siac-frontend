@@ -89,7 +89,9 @@ export function BuscadorAlumnos({
 
           e.preventDefault();
 
-          if (conLector && campo === "matricula" && onLector) {
+          // En "Todo", un texto sin espacios y con números se toma como matrícula.
+          const pareceMatricula = /^\S*\d\S*$/.test(valor.trim());
+          if (conLector && onLector && (campo === "matricula" || (campo === "todos" && pareceMatricula))) {
             onLector(valor.trim());
             return;
           }
