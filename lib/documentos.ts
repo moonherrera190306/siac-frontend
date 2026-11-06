@@ -443,21 +443,33 @@ function abrirHojaSimple(
 }
 
 /* =========================================
-   🧾 RECIBO DE PAGO
-   Mismo formato que el recibo impreso de caja: escudo de la UMSNH,
-   folio, conceptos con casilla e importe, total.
+   🧾 TICKET DE CAJA (IMPRESORA TÉRMICA)
+   Rollo de 80 mm. Todo en negro, sin fondos: la térmica no imprime
+   grises y el texto fino se pierde.
 ========================================= */
 
-const CASILLAS = [
-  { etiqueta: "INSCRIPCION", coincide: /INSCRIP/ },
-  { etiqueta: "CONSTANCIA", coincide: /CONSTANCIA/ },
-  { etiqueta: "MEMORANDUM", coincide: /MEMOR/ },
-];
+/** Ancho del rollo en mm. 80 es el estándar; cambiar a 58 si la impresora es chica. */
+export const ANCHO_TICKET_MM = 80;
 
 const pesos = (n: number) =>
   n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export function abrirRecibo(pago: any): boolean {
+/**
+ * Abre la ventana del ticket ANTES de cobrar: si se abre después de
+ * esperar al servidor, el navegador la toma como emergente y la bloquea.
+ */
+export function prepararVentanaTicket(): Window | null {
+  const v = window.open("", "_blank", "width=420,height=720");
+  if (v) {
+    v.document.write('<p style="font:14px system-ui;text-align:center;margin-top:40px">Registrando cobro…</p>');
+  }
+  return v;
+}
+
+export function abrirRecibo(pago: any, ventana?: Window | null): boolean {
+  const v = ventana ?? window.open("", "_blank", "width=420,height=720");
+  if (!v) return false;
+
   const alumno =
     pago.alumno ??
     (pago.exalumnoNombre
@@ -468,104 +480,101 @@ export function abrirRecibo(pago: any): boolean {
   const detalles = pago.detalles ?? [];
   const total = Number(pago.total ?? 0);
   const cancelado = pago.estado === "CANCELADO";
-
-  const importeDe = (d: any) => Number(d.monto ?? 0) * Number(d.cantidad ?? 1);
-  const sinAcento = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
-
-  // Cada concepto cae en su casilla; lo que no es de las tres va a OTROS.
-  const montos = CASILLAS.map(() => 0);
-  let otros = 0;
-  const descOtros: string[] = [];
-  for (const d of detalles) {
-    const n = sinAcento(d.concepto?.nombre ?? "");
-    const i = CASILLAS.findIndex((c) => c.coincide.test(n));
-    if (i >= 0) montos[i] += importeDe(d);
-    else {
-      otros += importeDe(d);
-      descOtros.push(d.descripcion || d.concepto?.nombre || "");
-    }
-  }
-
-  const fila = (etiqueta: string, monto: number) => `
-    <tr>
-      <td class="casilla"><span class="check">${monto ? "✓" : ""}</span></td>
-      <td class="concepto">${etiqueta}</td>
-      <td class="importe">${monto ? `<span>$</span><span>${pesos(monto)}</span>` : ""}</td>
-    </tr>`;
-
   const fecha = pago.pagadoEn ? new Date(pago.pagadoEn) : new Date();
-  const fechaCorta = `${String(fecha.getDate()).padStart(2, "0")}/${String(fecha.getMonth() + 1).padStart(2, "0")}/${fecha.getFullYear()}`;
+  const dd = (n: number) => String(n).padStart(2, "0");
+  const fechaCorta = `${dd(fecha.getDate())}/${dd(fecha.getMonth() + 1)}/${fecha.getFullYear()}`;
+  const hora = `${dd(fecha.getHours())}:${dd(fecha.getMinutes())}`;
 
-  const pagina = `
-    <div class="ticket">
-      ${cancelado ? '<div class="sello">CANCELADO</div>' : ""}
-      <div class="escudo">
-        <img src="/escudo-umsnh.png" alt="" onerror="this.onerror=null;this.src='/escudo-prepa.png'">
-      </div>
+  const lineas = detalles
+    .map((d: any) => {
+      const cant = Number(d.cantidad ?? 1);
+      const importe = Number(d.monto ?? 0) * cant;
+      return `
+        <div class="concepto">
+          <span>${cant > 1 ? `${cant} x ` : ""}${(d.concepto?.nombre ?? "CONCEPTO").toUpperCase()}</span>
+          <span>$${pesos(importe)}</span>
+        </div>
+        ${d.descripcion ? `<div class="desc">${d.descripcion}</div>` : ""}`;
+    })
+    .join("");
 
-      <div class="cabeza">
-        <p class="institucion">CENTRO DE ESTUDIOS<br>SUPERIORES DE<br>ZAMORA</p>
-        <div class="folio"><span>FOLIO</span><strong>${pago.folio ?? "—"}</strong></div>
-      </div>
+  const origen = window.location.origin;
 
-      <div class="linea"><span>R.F.C.${ESCUELA.rfc}</span><span class="fecha">${fechaCorta}</span></div>
-      <p class="domicilio">Dr. Alonso Martínez #670 Fracc. Jardinadas</p>
-      <p class="matricula">${alumno.matricula ?? ""}</p>
-      <p class="nombre">${nombre}</p>
-
-      <table>
-        <thead><tr><th colspan="2">CONCEPTO</th><th>IMPORTE</th></tr></thead>
-        <tbody>
-          ${CASILLAS.map((c, i) => fila(c.etiqueta, montos[i])).join("")}
-          ${fila("OTROS", otros)}
-          <tr><td colspan="2" class="detalle">${descOtros.join(", ")}</td><td class="importe"></td></tr>
-        </tbody>
-      </table>
-
-      <div class="total">
-        <span class="rayado">TOTAL</span>
-        <span class="cifra"><span>$</span><span>${pesos(total)}</span></span>
-      </div>
-
-      ${pago.iniciales ? `<p class="iniciales">${pago.iniciales}${pago.libro ? ` · Libro ${pago.libro}` : ""}</p>` : ""}
-      ${cancelado ? `<p class="motivo">Cancelado: ${pago.motivoCancela ?? ""}</p>` : ""}
+  v.document.open();
+  v.document.write(`<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Ticket ${pago.folio ?? ""}</title>
+<base href="${origen}/">
+<style>
+  @page { size: ${ANCHO_TICKET_MM}mm auto; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #fff; color: #000; }
+  body { font-family: "Courier New", Consolas, monospace; font-size: 12px; line-height: 1.3; }
+  .ticket { width: ${ANCHO_TICKET_MM}mm; padding: 4mm ${ANCHO_TICKET_MM >= 80 ? 4 : 2}mm 8mm; }
+  .centro { text-align: center; }
+  .escudo { width: 22mm; filter: grayscale(1) contrast(1.6); }
+  .inst { font-family: Arial, Helvetica, sans-serif; font-weight: 700; font-size: 13px; line-height: 1.15; margin: 2mm 0 1mm; }
+  .chico { font-size: 10.5px; }
+  .sep { border: 0; border-top: 1px dashed #000; margin: 2.5mm 0; }
+  .fila { display: flex; justify-content: space-between; gap: 2mm; }
+  .folio { font-size: 16px; font-weight: 700; }
+  .nombre { font-weight: 700; font-size: 12.5px; margin-top: 1mm; }
+  .concepto { display: flex; justify-content: space-between; gap: 2mm; font-weight: 700; }
+  .desc { font-size: 10.5px; margin: 0 0 1mm 2mm; }
+  .total { display: flex; justify-content: space-between; font-size: 18px; font-weight: 700; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 1.5mm 0; margin-top: 2mm; }
+  .letra { font-size: 10px; margin-top: 1.5mm; }
+  .cancelado { border: 3px solid #000; text-align: center; font-size: 20px; font-weight: 700; letter-spacing: 3px; padding: 1mm; margin: 2mm 0; }
+  .pie { font-size: 10px; margin-top: 3mm; }
+  @media screen { body { background: #e5e7eb; } .ticket { background: #fff; margin: 12px auto; box-shadow: 0 2px 10px rgba(0,0,0,.2); } }
+</style>
+</head>
+<body>
+  <div class="ticket">
+    <div class="centro">
+      <img class="escudo" src="/escudo-umsnh.png" alt="" onerror="this.style.display='none'">
+      <p class="inst">CENTRO DE ESTUDIOS<br>SUPERIORES DE ZAMORA</p>
+      <div class="chico">R.F.C. ${ESCUELA.rfc}</div>
+      <div class="chico">Dr. Alonso Martínez #670<br>Fracc. Jardinadas, Zamora, Mich.</div>
     </div>
-  `;
 
-  const estilos = `
-    .ticket { position:absolute; top:1.6cm; left:1.3cm; width:9.4cm; font-family: Arial, Helvetica, sans-serif; color:#111; }
-    .escudo { width:4.6cm; text-align:center; margin-left:1.1cm; }
-    .escudo img { width:3.2cm; height:auto; filter:grayscale(1) contrast(1.2); }
-    .cabeza { display:flex; justify-content:space-between; align-items:flex-start; margin-top:.25cm; }
-    .institucion { margin:0; font-family:"Times New Roman", Georgia, serif; font-size:12.5pt; line-height:1.15; text-align:center; width:6cm; }
-    .folio { text-align:center; margin-right:.6cm; }
-    .folio span { display:block; font-size:6.5pt; margin-bottom:.35cm; }
-    .folio strong { font-size:13pt; font-weight:400; }
-    .linea { display:flex; justify-content:space-between; margin-top:.25cm; font-size:9pt; }
-    .linea .fecha { font-size:11pt; margin-right:.5cm; }
-    .domicilio { margin:.15cm 0 0; font-size:9pt; }
-    .matricula { margin:.15cm 0 0; font-size:12pt; }
-    .nombre { margin:.35cm 0 .25cm; font-size:12pt; }
-    table { width:9.1cm; border-collapse:collapse; font-size:10pt; }
-    th { border:1.5px solid #111; font-weight:400; padding:2px 4px; }
-    td { border:1.5px solid #111; padding:1px 4px; height:.6cm; }
-    .casilla { width:.8cm; text-align:center; border-right:0; }
-    .check { display:inline-block; width:.45cm; height:.45cm; border:1.5px solid #111; border-radius:2px; line-height:.4cm; font-size:9pt; font-weight:700; }
-    .concepto { border-left:1.5px solid #111; }
-    .importe { width:2.9cm; }
-    .importe span:first-child { float:left; }
-    .importe span:last-child { float:right; }
-    .detalle { font-size:8pt; color:#333; }
-    .total { display:flex; align-items:flex-end; width:9.1cm; margin-top:.25cm; border-bottom:1.5px solid #111; }
-    .rayado { flex:1; text-align:right; padding:2px 6px; margin-left:1.6cm; font-size:10pt;
-      background:repeating-linear-gradient(45deg,#999 0 1px,#ddd 1px 3px); }
-    .cifra { width:2.9cm; border:2px solid #111; border-bottom:0; padding:2px 4px; font-size:11pt; display:flex; justify-content:space-between; }
-    .iniciales { margin:.3cm 0 0; font-size:8pt; color:#444; }
-    .motivo { margin:.2cm 0 0; font-size:8pt; color:#991b1b; }
-    .sello { position:absolute; top:5cm; left:.5cm; transform:rotate(-18deg); font-size:40pt; font-weight:800; color:rgba(185,28,28,.2); letter-spacing:4px; }
-  `;
+    <hr class="sep">
 
-  return abrirHojaSimple(`Recibo ${pago.folio ?? ""}`, [pagina], estilos);
+    <div class="fila"><span>FOLIO</span><span class="folio">${pago.folio ?? "—"}</span></div>
+    <div class="fila"><span>FECHA</span><span>${fechaCorta} ${hora}</span></div>
+    ${pago.libro ? `<div class="fila"><span>LIBRO</span><span>${pago.libro}</span></div>` : ""}
+    ${pago.iniciales ? `<div class="fila"><span>CAJERO</span><span>${pago.iniciales}</span></div>` : ""}
+
+    <hr class="sep">
+
+    <div class="fila"><span>MATRÍCULA</span><span>${alumno.matricula ?? ""}</span></div>
+    <div class="nombre">${nombre}</div>
+    ${alumno.grupo?.nombre ? `<div class="chico">GRUPO ${alumno.grupo.nombre}</div>` : ""}
+
+    <hr class="sep">
+
+    ${lineas || '<div class="chico">Sin conceptos</div>'}
+
+    <div class="total"><span>TOTAL</span><span>$${pesos(total)}</span></div>
+    <div class="letra">${importeConLetra(total)}</div>
+    <div class="fila chico" style="margin-top:1.5mm"><span>PAGO</span><span>${pago.metodo ?? ""}${pago.referencia ? ` · ${pago.referencia}` : ""}</span></div>
+
+    ${cancelado ? `<div class="cancelado">CANCELADO</div><div class="chico">${pago.motivoCancela ?? ""}</div>` : ""}
+
+    <hr class="sep">
+    <div class="centro pie">Conserve este ticket para cualquier aclaración.<br>¡Gracias!</div>
+  </div>
+  <script>
+    // Se espera al escudo para que salga en la impresión.
+    const img = document.querySelector(".escudo");
+    const listo = () => setTimeout(() => { window.focus(); window.print(); }, 200);
+    if (!img || img.complete) listo(); else { img.onload = listo; img.onerror = listo; }
+  </script>
+</body>
+</html>`);
+  v.document.close();
+  return true;
 }
 
 /* =========================================

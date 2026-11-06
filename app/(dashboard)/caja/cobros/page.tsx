@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/config";
-import { abrirRecibo } from "@/lib/documentos";
+import { abrirRecibo, prepararVentanaTicket } from "@/lib/documentos";
 import {
   BuscadorAlumnos,
   filtrarAlumnos,
@@ -243,6 +243,10 @@ export default function CajaCobrosPage() {
       return;
     }
 
+    // 🧾 La ventana del ticket se abre YA, dentro del clic: si se abre
+    // después de esperar al servidor, el navegador la bloquea.
+    const ventana = prepararVentanaTicket();
+
     try {
       setCobrando(true);
 
@@ -263,11 +267,17 @@ export default function CajaCobrosPage() {
       const json = await res.json();
 
       if (!res.ok) {
+        ventana?.close();
         setError(json?.message || "No se pudo registrar el cobro");
         return;
       }
 
       setRecibo(json?.data ?? null);
+
+      // Ticket automático: se imprime al registrar el cobro.
+      if (json?.data && !abrirRecibo(json.data, ventana)) {
+        setError("Cobro registrado. El navegador bloqueó el ticket: usa el botón para imprimirlo.");
+      }
       setLineas([]);
       setReferencia("");
 
@@ -279,6 +289,7 @@ export default function CajaCobrosPage() {
 
       if (modo === "alumno") seleccionar(alumnoId);
     } catch {
+      ventana?.close();
       setError("Error de conexión con el servidor");
     } finally {
       setCobrando(false);
