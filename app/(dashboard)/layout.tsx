@@ -340,6 +340,17 @@ export default function DashboardLayout({
       : []),
   ];
 
+  // Nivel del usuario: el del personal viene del backend; alumnos,
+  // maestros y quien ve ambos niveles usan el login por el que entraron.
+  const derecho = (() => {
+    if (user?.nivel) return user.nivel === "UNIVERSIDAD";
+    try {
+      return localStorage.getItem("loginNivel") === "UNIVERSIDAD";
+    } catch {
+      return false;
+    }
+  })();
+
   const ROL: Record<string, string> = {
     ADMIN: "Administración",
     DIRECTOR: "Dirección",
@@ -441,13 +452,24 @@ export default function DashboardLayout({
       >
         {/* MARCA — el escudo de la escuela, no un cuadro de color */}
         <div className="siac-sidebar-seccion flex items-center gap-3 border-b px-5 py-4">
-          <Image
-            src="/escudo-ceszam.png"
-            alt=""
-            width={361}
-            height={420}
-            className="h-10 w-auto flex-none"
-          />
+          {/* Derecho lleva la figura de la Justicia; prepa, el escudo. */}
+          {derecho ? (
+            <Image
+              src="/justicia-universidad.png"
+              alt=""
+              width={433}
+              height={560}
+              className="h-10 w-auto flex-none"
+            />
+          ) : (
+            <Image
+              src="/escudo-ceszam.png"
+              alt=""
+              width={361}
+              height={420}
+              className="h-10 w-auto flex-none"
+            />
+          )}
 
           <div className="min-w-0">
             <p className="text-lg font-bold leading-none tracking-[0.14em] text-white">
