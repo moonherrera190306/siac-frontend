@@ -176,6 +176,12 @@ export default function DashboardLayout({
     path: "/director/dashboard",
   },
 
+  // Expedientes: kardex y constancias de cada alumno.
+  {
+    label: "Expedientes",
+    path: "/secretaria/inscripciones",
+  },
+
   {
     label: "Asistencias",
     path: "/director/asistencias",

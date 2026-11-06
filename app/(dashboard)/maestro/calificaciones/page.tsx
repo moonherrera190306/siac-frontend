@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/config";
+import { abrirListaGrupo } from "@/lib/documentos";
 
 // Columnas capturables del kardex, en el orden del formato oficial.
 const COLUMNAS = [
@@ -218,6 +219,23 @@ export default function MaestroCalificacionesPage() {
                   Grupo {rejilla.asignacion.grupo} · {rejilla.asignacion.ciclo} ·{" "}
                   {esAcreditacion ? "AC / NA" : "escala 1 - 10"}
                 </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2 text-sm">
+                <button
+                  type="button"
+                  onClick={() => abrirListaGrupo(rejilla, "PARCIALES")}
+                  className="rounded-lg border px-3 py-1 hover:bg-slate-50"
+                >
+                  Lista de parciales
+                </button>
+                <button
+                  type="button"
+                  onClick={() => abrirListaGrupo(rejilla, "FINAL")}
+                  className="rounded-lg border px-3 py-1 hover:bg-slate-50"
+                >
+                  Lista de examen final
+                </button>
               </div>
 
               <div className="text-sm">

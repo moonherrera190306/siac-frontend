@@ -6,6 +6,8 @@ import { API_URL } from "@/lib/config";
 // para todos los documentos oficiales.
 import {
   abrirConstancia,
+  abrirConstanciaUniversidad,
+  esUniversidad,
   FIRMANTES,
   type TipoConstancia,
 } from "@/lib/documentos";
@@ -98,7 +100,26 @@ export default function SecretariaConstanciasPage() {
 
   // Abre la constancia en hoja membretada, lista para imprimir o guardar
   // en PDF desde el navegador.
-  const generar = (t: any) => {
+  const generar = async (t: any) => {
+    // Derecho tiene su propio formato: lleva la lista de materias del semestre.
+    if (esUniversidad(t.alumno)) {
+      const r = await fetch(`${API_URL}/api/calificaciones/alumno/${t.alumno?.id}`, { credentials: "include" });
+      const j = await r.json().catch(() => null);
+      const okU = abrirConstanciaUniversidad(t.alumno, {
+        materias: j?.materiasActuales ?? [],
+        inicioCurso: j?.cicloActual?.fechaInicio ?? ciclo?.fechaInicio,
+        finCurso: j?.cicloActual?.fechaFin ?? ciclo?.fechaFin,
+      });
+      if (!okU) {
+        setError("El navegador bloqueó la ventana emergente. Permítela para generar la constancia.");
+        return;
+      }
+      if (t.estado === "SOLICITADO" || t.estado === "EN_PROCESO") {
+        avanzar(t.id, t.estado === "SOLICITADO" ? "EN_PROCESO" : "LISTO");
+      }
+      return;
+    }
+
     const ok = abrirConstancia(t.alumno, {
       tipo,
       firmante,
@@ -155,6 +176,7 @@ export default function SecretariaConstanciasPage() {
             <option value="CURSANDO_PRIMAVERA">
               Cursando — receso de semana santa y pascua
             </option>
+            <option value="BUENA_CONDUCTA">Buena conducta</option>
           </select>
         </label>
 

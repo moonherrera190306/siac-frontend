@@ -334,143 +334,658 @@ function abrirVentana(titulo: string, cuerpo: string, estilos: string) {
 }
 
 /* =========================================
-   🧾 RECIBO DE PAGO
+   🔤 NOMBRES Y BACHILLERATOS COMO EN LOS DOCUMENTOS OFICIALES
 ========================================= */
+
+const PARTICULAS = new Set(["DE", "DEL", "LA", "LAS", "LOS", "Y", "SAN", "SANTA"]);
+
+/**
+ * El SIAC guarda "NOMBRES APELLIDO1 APELLIDO2"; los documentos impresos
+ * van "APELLIDO1 APELLIDO2 NOMBRES". Las partículas (DE, DEL, LA…) se
+ * pegan al apellido que sigue: "MARIA DE LA LUZ DE LA CRUZ PEREZ".
+ */
+export function partirNombre(completo?: string | null): { apellidos: string; nombres: string } {
+  const p = String(completo ?? "").trim().toUpperCase().split(/\s+/).filter(Boolean);
+  if (p.length < 3) return { apellidos: p.slice(1).join(" "), nombres: p[0] ?? "" };
+
+  const unidades: string[] = [];
+  let i = p.length - 1;
+  while (i >= 0 && unidades.length < 2) {
+    let u = p[i--];
+    while (i >= 1 && PARTICULAS.has(p[i])) u = `${p[i--]} ${u}`;
+    unidades.unshift(u);
+  }
+  const nombres = p.slice(0, i + 1).join(" ");
+  if (!nombres) return { apellidos: unidades.slice(0, -1).join(" "), nombres: unidades.at(-1) ?? "" };
+  return { apellidos: unidades.join(" "), nombres };
+}
+
+/** "PEÑA DIEGO ALEJANDRO": apellidos primero. */
+export function nombreOficial(completo?: string | null): string {
+  const { apellidos, nombres } = partirNombre(completo);
+  return [apellidos, nombres].filter(Boolean).join(" ") || "—";
+}
+
+const AREAS: Record<string, string> = {
+  CQB: "CIENCIAS QUÍMICO BIOLÓGICAS",
+  CSH: "CIENCIAS SOCIALES Y HUMANIDADES",
+  IA: "INGENIERÍA Y ARQUITECTURA",
+  CEA: "CIENCIAS ECONÓMICO ADMINISTRATIVAS",
+};
+
+/**
+ * Del nombre del grupo al bachillerato impreso:
+ *   "3C TR-IA-09"     → "TR. INGENIERÍA Y ARQUITECTURA 09"
+ *   "5E AP-CQB-11-1"  → "ÁREA PROP. CIENCIAS QUÍMICO BIOLÓGICAS 11-1"
+ *   "2A" (1° y 2°)    → "TRONCO COMÚN"
+ */
+export function bachilleratoDeGrupo(grupo?: string | null, respaldo?: string | null): string {
+  const g = String(grupo ?? "").toUpperCase();
+  const m = g.match(/\b(TR|AP)-([A-Z]+)-(\d+(?:-\d+)?)/);
+  if (m) return `${m[1] === "TR" ? "TR." : "ÁREA PROP."} ${AREAS[m[2]] ?? m[2]} ${m[3]}`;
+  if (/DER/.test(g)) return "LICENCIATURA EN DERECHO";
+  if (/^[12]\s*[A-Z]\b/.test(g.trim())) return "TRONCO COMÚN";
+  return (respaldo ?? "").toUpperCase() || "TRONCO COMÚN";
+}
+
+/** Letra del grupo: "3E TR-CQB-11-1" → "E". */
+const letraGrupo = (grupo?: string | null) =>
+  String(grupo ?? "").trim().toUpperCase().match(/^\d+\s*([A-Z])/)?.[1] ?? "";
+
+/**
+ * Hoja tamaño carta sin membrete (recibo, kardex). Los documentos de
+ * caja y de control escolar se imprimen en papel blanco.
+ */
+function abrirHojaSimple(
+  titulo: string,
+  paginas: string[],
+  estilos: string,
+  horizontal = false
+): boolean {
+  const v = window.open("", "_blank", "width=1000,height=1000");
+  if (!v) return false;
+
+  const ancho = horizontal ? "27.94cm" : "21.59cm";
+  const alto = horizontal ? "21.59cm" : "27.94cm";
+  const origen = window.location.origin;
+
+  v.document.write(`<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>${titulo}</title>
+<base href="${origen}/">
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; padding:24px 0; background:#e2e8f0; color:#000; font-family: Arial, Helvetica, sans-serif; }
+  .hoja { position:relative; width:${ancho}; height:${alto}; margin:0 auto 24px; background:#fff; box-shadow:0 4px 16px rgba(15,23,42,.18); overflow:hidden; }
+  @media print {
+    @page { size: letter ${horizontal ? "landscape" : "portrait"}; margin:0; }
+    html { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    body { background:#fff; padding:0; }
+    .hoja { margin:0; box-shadow:none; page-break-after:always; }
+    .hoja:last-child { page-break-after:auto; }
+    .no-imprimir { display:none !important; }
+  }
+  ${estilos}
+</style>
+</head>
+<body>
+  ${paginas.map((p) => `<div class="hoja">${p}</div>`).join("")}
+  <p class="no-imprimir" style="text-align:center;color:#475569;font-size:13px">
+    Usa Ctrl+P para imprimir o guardar como PDF${horizontal ? " (orientación horizontal)" : ""}.
+  </p>
+  <script>window.onload = () => setTimeout(() => window.print(), 400);</script>
+</body>
+</html>`);
+  v.document.close();
+  return true;
+}
+
+/* =========================================
+   🧾 RECIBO DE PAGO
+   Mismo formato que el recibo impreso de caja: escudo de la UMSNH,
+   folio, conceptos con casilla e importe, total.
+========================================= */
+
+const CASILLAS = [
+  { etiqueta: "INSCRIPCION", coincide: /INSCRIP/ },
+  { etiqueta: "CONSTANCIA", coincide: /CONSTANCIA/ },
+  { etiqueta: "MEMORANDUM", coincide: /MEMOR/ },
+];
+
+const pesos = (n: number) =>
+  n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 export function abrirRecibo(pago: any): boolean {
-  // Pagos de exalumnos: el backend ya manda un `alumno` virtual, pero
-  // por si el recibo se arma con el pago "crudo" recién creado.
   const alumno =
     pago.alumno ??
     (pago.exalumnoNombre
-      ? { matricula: pago.exalumnoMatricula, user: { name: `${pago.exalumnoNombre} (exalumno)` } }
+      ? { matricula: pago.exalumnoMatricula, user: { name: pago.exalumnoNombre } }
       : {});
 
+  const nombre = nombreOficial(String(alumno.user?.name ?? "").replace(/\s*\(exalumno\)\s*$/i, ""));
   const detalles = pago.detalles ?? [];
-
   const total = Number(pago.total ?? 0);
-
   const cancelado = pago.estado === "CANCELADO";
 
-  const filas = detalles
-    .map(
-      (d: any) => `
-      <tr>
-        <td>${d.concepto?.nombre ?? "Concepto"}${
-        d.descripcion ? `<br><span class="chico">${d.descripcion}</span>` : ""
-      }</td>
-        <td class="centro">${d.cantidad ?? 1}</td>
-        <td class="derecha">$${Number(d.monto ?? 0).toFixed(2)}</td>
-        <td class="derecha">$${(Number(d.monto ?? 0) * Number(d.cantidad ?? 1)).toFixed(2)}</td>
-      </tr>`
-    )
-    .join("");
+  const importeDe = (d: any) => Number(d.monto ?? 0) * Number(d.cantidad ?? 1);
+  const sinAcento = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
 
-  const cuerpo = `
-    ${cancelado ? '<div class="sello-cancelado">CANCELADO</div>' : ""}
-
-    <header>
-      <div>
-        <h1>${ESCUELA.nombre}</h1>
-        <p class="chico">${ESCUELA.domicilio}</p>
-        <p class="chico">RFC ${ESCUELA.rfc}</p>
-      </div>
-
-      <div class="folio">
-        <span class="chico">FOLIO</span>
-        <strong>${pago.folio ?? "—"}</strong>
-        ${pago.libro ? `<span class="chico">Libro ${pago.libro}</span>` : ""}
-      </div>
-    </header>
-
-    <h2>RECIBO DE PAGO</h2>
-
-    <dl class="datos">
-      <div><dt>Alumno</dt><dd>${alumno.user?.name ?? "—"}</dd></div>
-      <div><dt>Matrícula</dt><dd>${alumno.matricula ?? "—"}</dd></div>
-      <div><dt>Grupo</dt><dd>${alumno.grupo?.nombre ?? "—"}</dd></div>
-      <div><dt>Fecha</dt><dd>${
-        pago.pagadoEn
-          ? new Date(pago.pagadoEn).toLocaleDateString("es-MX", {
-              day: "2-digit",
-              month: "long",
-              year: "numeric",
-            })
-          : "—"
-      }</dd></div>
-      <div><dt>Forma de pago</dt><dd>${pago.metodo ?? "—"}</dd></div>
-      ${pago.referencia ? `<div><dt>Referencia</dt><dd>${pago.referencia}</dd></div>` : ""}
-      ${pago.iniciales ? `<div><dt>Cajero</dt><dd>${pago.iniciales}</dd></div>` : ""}
-    </dl>
-
-    <table>
-      <thead>
-        <tr>
-          <th>Concepto</th>
-          <th class="centro">Cant.</th>
-          <th class="derecha">P. unitario</th>
-          <th class="derecha">Importe</th>
-        </tr>
-      </thead>
-      <tbody>${filas || '<tr><td colspan="4">Sin conceptos</td></tr>'}</tbody>
-    </table>
-
-    <div class="total">
-      <span>TOTAL</span>
-      <strong>$${total.toFixed(2)}</strong>
-    </div>
-
-    <p class="letra">Son: ${importeConLetra(total)}</p>
-
-    ${
-      cancelado
-        ? `<p class="aviso">Este recibo fue cancelado el ${
-            pago.canceladoEn
-              ? new Date(pago.canceladoEn).toLocaleDateString("es-MX")
-              : ""
-          }. Motivo: ${pago.motivoCancela ?? "—"}</p>`
-        : ""
+  // Cada concepto cae en su casilla; lo que no es de las tres va a OTROS.
+  const montos = CASILLAS.map(() => 0);
+  let otros = 0;
+  const descOtros: string[] = [];
+  for (const d of detalles) {
+    const n = sinAcento(d.concepto?.nombre ?? "");
+    const i = CASILLAS.findIndex((c) => c.coincide.test(n));
+    if (i >= 0) montos[i] += importeDe(d);
+    else {
+      otros += importeDe(d);
+      descOtros.push(d.descripcion || d.concepto?.nombre || "");
     }
+  }
 
-    <div class="firmas">
-      <div><span></span><p>Recibí</p></div>
-      <div><span></span><p>Caja</p></div>
+  const fila = (etiqueta: string, monto: number) => `
+    <tr>
+      <td class="casilla"><span class="check">${monto ? "✓" : ""}</span></td>
+      <td class="concepto">${etiqueta}</td>
+      <td class="importe">${monto ? `<span>$</span><span>${pesos(monto)}</span>` : ""}</td>
+    </tr>`;
+
+  const fecha = pago.pagadoEn ? new Date(pago.pagadoEn) : new Date();
+  const fechaCorta = `${String(fecha.getDate()).padStart(2, "0")}/${String(fecha.getMonth() + 1).padStart(2, "0")}/${fecha.getFullYear()}`;
+
+  const pagina = `
+    <div class="ticket">
+      ${cancelado ? '<div class="sello">CANCELADO</div>' : ""}
+      <div class="escudo">
+        <img src="/escudo-umsnh.png" alt="" onerror="this.onerror=null;this.src='/escudo-prepa.png'">
+      </div>
+
+      <div class="cabeza">
+        <p class="institucion">CENTRO DE ESTUDIOS<br>SUPERIORES DE<br>ZAMORA</p>
+        <div class="folio"><span>FOLIO</span><strong>${pago.folio ?? "—"}</strong></div>
+      </div>
+
+      <div class="linea"><span>R.F.C.${ESCUELA.rfc}</span><span class="fecha">${fechaCorta}</span></div>
+      <p class="domicilio">Dr. Alonso Martínez #670 Fracc. Jardinadas</p>
+      <p class="matricula">${alumno.matricula ?? ""}</p>
+      <p class="nombre">${nombre}</p>
+
+      <table>
+        <thead><tr><th colspan="2">CONCEPTO</th><th>IMPORTE</th></tr></thead>
+        <tbody>
+          ${CASILLAS.map((c, i) => fila(c.etiqueta, montos[i])).join("")}
+          ${fila("OTROS", otros)}
+          <tr><td colspan="2" class="detalle">${descOtros.join(", ")}</td><td class="importe"></td></tr>
+        </tbody>
+      </table>
+
+      <div class="total">
+        <span class="rayado">TOTAL</span>
+        <span class="cifra"><span>$</span><span>${pesos(total)}</span></span>
+      </div>
+
+      ${pago.iniciales ? `<p class="iniciales">${pago.iniciales}${pago.libro ? ` · Libro ${pago.libro}` : ""}</p>` : ""}
+      ${cancelado ? `<p class="motivo">Cancelado: ${pago.motivoCancela ?? ""}</p>` : ""}
     </div>
-
-    <p class="pie">
-      Este comprobante ampara únicamente los conceptos señalados.
-      Conserve este recibo para cualquier aclaración.
-    </p>
   `;
 
   const estilos = `
-    header { display:flex; justify-content:space-between; align-items:flex-start; gap:24px; border-bottom:2px solid #0f172a; padding-bottom:16px; }
-    h1 { font-size:26px; font-weight:800; letter-spacing:3px; margin:0 0 6px; }
-    h2 { text-align:center; font-size:13px; letter-spacing:2px; margin:22px 0; color:#475569; }
-    .chico { font-size:11px; color:#64748b; margin:2px 0; }
-    .folio { text-align:right; }
-    .folio strong { display:block; font-size:26px; color:#b91c1c; line-height:1; }
-    .datos { display:grid; grid-template-columns:1fr 1fr; gap:10px 24px; margin:0 0 22px; }
-    .datos div { border-bottom:1px dotted #cbd5e1; padding-bottom:4px; }
-    .datos dt { font-size:10px; text-transform:uppercase; color:#64748b; letter-spacing:.5px; }
-    .datos dd { margin:2px 0 0; font-size:13px; font-weight:600; }
-    table { width:100%; border-collapse:collapse; font-size:13px; }
-    th { background:#f1f5f9; text-align:left; padding:8px 10px; font-size:11px; text-transform:uppercase; color:#475569; }
-    td { padding:9px 10px; border-bottom:1px solid #e2e8f0; }
-    .centro { text-align:center; }
-    .derecha { text-align:right; }
-    .total { display:flex; justify-content:flex-end; align-items:baseline; gap:20px; margin-top:14px; font-size:18px; }
-    .total strong { font-size:24px; }
-    .letra { text-align:right; font-size:11px; color:#475569; margin-top:2px; }
-    .aviso { margin-top:18px; padding:10px 12px; background:#fef2f2; color:#7f1d1d; border-radius:8px; font-size:12px; }
-    .firmas { display:flex; gap:60px; justify-content:center; margin-top:60px; }
-    .firmas div { text-align:center; }
-    .firmas span { display:block; width:190px; border-top:1px solid #0f172a; }
-    .firmas p { margin:6px 0 0; font-size:11px; color:#475569; }
-    .pie { margin-top:34px; font-size:10px; color:#94a3b8; text-align:center; }
-    .sello-cancelado { position:absolute; top:180px; left:50%; transform:translateX(-50%) rotate(-18deg); font-size:64px; font-weight:800; color:rgba(185,28,28,.16); letter-spacing:6px; pointer-events:none; }
+    .ticket { position:absolute; top:1.6cm; left:1.3cm; width:9.4cm; font-family: Arial, Helvetica, sans-serif; color:#111; }
+    .escudo { width:4.6cm; text-align:center; margin-left:1.1cm; }
+    .escudo img { width:3.2cm; height:auto; filter:grayscale(1) contrast(1.2); }
+    .cabeza { display:flex; justify-content:space-between; align-items:flex-start; margin-top:.25cm; }
+    .institucion { margin:0; font-family:"Times New Roman", Georgia, serif; font-size:12.5pt; line-height:1.15; text-align:center; width:6cm; }
+    .folio { text-align:center; margin-right:.6cm; }
+    .folio span { display:block; font-size:6.5pt; margin-bottom:.35cm; }
+    .folio strong { font-size:13pt; font-weight:400; }
+    .linea { display:flex; justify-content:space-between; margin-top:.25cm; font-size:9pt; }
+    .linea .fecha { font-size:11pt; margin-right:.5cm; }
+    .domicilio { margin:.15cm 0 0; font-size:9pt; }
+    .matricula { margin:.15cm 0 0; font-size:12pt; }
+    .nombre { margin:.35cm 0 .25cm; font-size:12pt; }
+    table { width:9.1cm; border-collapse:collapse; font-size:10pt; }
+    th { border:1.5px solid #111; font-weight:400; padding:2px 4px; }
+    td { border:1.5px solid #111; padding:1px 4px; height:.6cm; }
+    .casilla { width:.8cm; text-align:center; border-right:0; }
+    .check { display:inline-block; width:.45cm; height:.45cm; border:1.5px solid #111; border-radius:2px; line-height:.4cm; font-size:9pt; font-weight:700; }
+    .concepto { border-left:1.5px solid #111; }
+    .importe { width:2.9cm; }
+    .importe span:first-child { float:left; }
+    .importe span:last-child { float:right; }
+    .detalle { font-size:8pt; color:#333; }
+    .total { display:flex; align-items:flex-end; width:9.1cm; margin-top:.25cm; border-bottom:1.5px solid #111; }
+    .rayado { flex:1; text-align:right; padding:2px 6px; margin-left:1.6cm; font-size:10pt;
+      background:repeating-linear-gradient(45deg,#999 0 1px,#ddd 1px 3px); }
+    .cifra { width:2.9cm; border:2px solid #111; border-bottom:0; padding:2px 4px; font-size:11pt; display:flex; justify-content:space-between; }
+    .iniciales { margin:.3cm 0 0; font-size:8pt; color:#444; }
+    .motivo { margin:.2cm 0 0; font-size:8pt; color:#991b1b; }
+    .sello { position:absolute; top:5cm; left:.5cm; transform:rotate(-18deg); font-size:40pt; font-weight:800; color:rgba(185,28,28,.2); letter-spacing:4px; }
   `;
 
-  return abrirVentana(`Recibo ${pago.folio ?? ""}`, cuerpo, estilos);
+  return abrirHojaSimple(`Recibo ${pago.folio ?? ""}`, [pagina], estilos);
+}
+
+/* =========================================
+   📒 KARDEX — REGISTRO DE CALIFICACIONES
+   Hoja horizontal; tres semestres por hoja, como el impreso.
+========================================= */
+
+export function abrirKardex(alumno: any, calificaciones: any[], inscripciones: any[] = []): boolean {
+  const { apellidos, nombres } = partirNombre(alumno?.user?.name);
+  const universidad = /DER/i.test(alumno?.grupo?.nombre ?? "") || /DERECHO/i.test(alumno?.carrera?.nombre ?? "");
+  const titulo = universidad
+    ? "CENTRO DE ESTUDIOS SUPERIORES DE ZAMORA. REGISTRO DE CALIFICACIONES (KARDEX)"
+    : "ESCUELA PREPARATORIA POR COOPERACIÓN DE ZAMORA. REGISTRO DE CALIFICACIONES (KARDEX)";
+
+  const fecha = (v: any) => (v ? new Date(v).toISOString().slice(0, 10) : "");
+  const inicio = (c: any) => new Date(c.cicloEscolar?.fechaInicio ?? c.cicloEscolar?.createdAt ?? 0).getTime();
+
+  // Grupo en que estuvo inscrito en cada ciclo.
+  const grupoDeCiclo = new Map<string, string>();
+  for (const i of inscripciones ?? []) {
+    if (i.cicloEscolarId && i.grupo?.nombre) grupoDeCiclo.set(i.cicloEscolarId, i.grupo.nombre);
+  }
+
+  // Una fila por materia: el primer intento y hasta dos recursamientos.
+  const porMateria = new Map<string, any[]>();
+  for (const c of calificaciones ?? []) {
+    const k = c.materiaId ?? c.materia?.id;
+    if (!porMateria.has(k)) porMateria.set(k, []);
+    porMateria.get(k)!.push(c);
+  }
+
+  const semestres = new Map<number, { ciclo: any; filas: any[][] }>();
+  for (const intentos of porMateria.values()) {
+    intentos.sort((a, b) => inicio(a) - inicio(b));
+    const n = intentos[0].materia?.semestre?.numero ?? 0;
+    if (!semestres.has(n)) semestres.set(n, { ciclo: intentos[0].cicloEscolar, filas: [] });
+    semestres.get(n)!.filas.push(intentos);
+  }
+
+  const v = (x: any) => (x ?? "") === null ? "" : String(x ?? "");
+
+  const bloque = (n: number, b: { ciclo: any; filas: any[][] }) => {
+    const grupo = grupoDeCiclo.get(b.ciclo?.id) ?? "";
+    const etiqueta = universidad ? (alumno?.carrera?.nombre ?? "").toUpperCase() : bachilleratoDeGrupo(grupo, n <= 2 ? "TRONCO COMÚN" : alumno?.trayectoria?.nombre);
+    const letra = letraGrupo(grupo);
+    const filas = b.filas
+      .sort((x, y) => String(x[0].materia?.clave ?? x[0].materia?.nombre ?? "").localeCompare(String(y[0].materia?.clave ?? y[0].materia?.nombre ?? "")))
+      .map((intentos) => {
+        const [c, r1, r2] = intentos;
+        const ultimo = intentos[intentos.length - 1];
+        return `<tr>
+          <td class="mat">${(c.materia?.nombre ?? "—").toUpperCase()}</td>
+          <td>${v(c.primerParcial)}</td><td>${v(c.segundoParcial)}</td><td>${v(c.promedio)}</td>
+          <td>${v(c.examenFinal)}</td><td>${v(c.notaFinal)}</td><td>${v(c.extraordinario)}</td><td>${v(c.adicional)}</td>
+          <td>${v(r1?.notaFinal)}</td><td>${v(r1?.extraordinario)}</td><td>${v(r1?.especial)}</td>
+          <td>${v(r2?.notaFinal)}</td><td>${v(r2?.extraordinario)}</td><td>${v(r2?.especial)}</td>
+          <td></td><td>${v(ultimo.articulo)}</td>
+          <td class="fecha">${intentos.length > 1 ? fecha(ultimo.updatedAt) : ""}</td>
+          <td>${v(ultimo.notaDefinitiva)}</td>
+          <td class="est">${estatusImpreso(ultimo)}</td>
+          <td class="obs"></td>
+        </tr>`;
+      })
+      .join("");
+
+    return `
+      <div class="bloque">
+        <div class="cab-bloque">
+          <span class="etiqueta">${etiqueta}</span>
+          <span class="semestre">${semestreEnLetra(n) || "SEMESTRE"}${letra ? ` "${letra}"` : ""} &nbsp; ${b.ciclo?.nombre ?? ""}</span>
+        </div>
+        <table>
+          <colgroup><col class="c-mat">${'<col class="c-n">'.repeat(14)}<col class="c-art"><col class="c-fecha"><col class="c-n"><col class="c-est"><col class="c-obs"></colgroup>
+          <thead><tr>
+            <th class="mat">Materias</th><th>PP</th><th>SP</th><th>PROM</th><th>EF</th><th>O</th><th>EE</th><th>EA</th>
+            <th class="osc">O</th><th class="osc">E</th><th class="osc">EER</th>
+            <th>O</th><th>E</th><th>EER</th>
+            <th class="osc">NPA</th><th class="osc">Artículo</th><th>Fecha</th><th>ND</th><th>Estatus</th><th>Observaciones</th>
+          </tr></thead>
+          <tbody>${filas}</tbody>
+        </table>
+      </div>`;
+  };
+
+  const ordenados = [...semestres.entries()].sort((a, b) => a[0] - b[0]);
+  const grupos: [number, any][][] = [];
+  for (let i = 0; i < ordenados.length; i += 3) grupos.push(ordenados.slice(i, i + 3));
+  if (!grupos.length) grupos.push([]);
+
+  const anioIngreso = (() => {
+    const primero = [...(calificaciones ?? [])].sort((a, b) => inicio(a) - inicio(b))[0];
+    const anio = primero?.cicloEscolar?.nombre?.match(/\d{4}/)?.[0];
+    return anio ? anio.slice(2) : "";
+  })();
+
+  const encabezado = `
+    <p class="titulo">${titulo}</p>
+    <div class="datos">
+      <div>
+        <p><b>APELLIDOS:</b> ${apellidos}</p>
+        <p><b>NOMBRE:</b> ${nombres}</p>
+        <p><b>MATRÍCULA:</b> ${alumno?.matricula ?? ""} &nbsp; <b>EXPEDIENTE:</b> ${String(alumno?.matricula ?? "").slice(-6)}</p>
+        <p><b>SITUACIÓN ACADÉMICA:</b> ${alumno?.estatusAcademico === "ACTIVO" ? "REGULAR" : (alumno?.estatusAcademico ?? "")}</p>
+        <p><b>AÑO DE INGRESO:</b> ${anioIngreso}</p>
+      </div>
+      <div>
+        <p><b>LUGAR DE NACIMIENTO:</b> ${[alumno?.ciudad, alumno?.estado].filter(Boolean).join(", ").toUpperCase()}</p>
+        <p><b>F. DE NACIMIENTO:</b> ${fecha(alumno?.fechaNacimiento)}</p>
+        <p><b>DOMICILIO:</b> ${(alumno?.direccion ?? "").toUpperCase()}</p>
+        <p><b>SECUNDARIA:</b></p>
+        <p><b>CURP:</b> ${(alumno?.curp ?? "").toUpperCase()}</p>
+      </div>
+      <div>
+        <p><b>SEXO:</b> ${(alumno?.sexo ?? "").toUpperCase().slice(0, 1)}</p>
+        <p><b>TUTOR:</b> ${(alumno?.tutorNombre ?? "").toUpperCase()}</p>
+        <p><b>TEL. TUTOR:</b> ${alumno?.tutorTelefono ?? ""}</p>
+        <p><b>CEL. ALUMNO:</b> ${alumno?.telefono ?? ""}</p>
+      </div>
+    </div>
+    <p class="calif">C A L I F I C A C I O N E S</p>
+    <p class="leyenda">P.P. 1er Parcial, S.P. 2do Parcial, PROM. Promedio, E.F. Examen Final, O. Ordinario, E.E. Extraordinario, E.A. Adicional, NPA Nota Por Artículo, N.D. Nota Definitiva</p>
+  `;
+
+  const paginas = grupos.map((g, i) => `
+    <div class="pag">
+      ${universidad ? "" : bannerPrepa("10cm")}
+      ${i === 0 ? encabezado : `<p class="titulo">${titulo}</p>`}
+      ${g.map(([n, b]) => bloque(n, b)).join("")}
+      <p class="pie">Página ${i + 1}/${grupos.length}</p>
+    </div>`);
+
+  const estilos = `
+    ${ESTILO_BANNER}
+    .pag { position:absolute; inset:.7cm 1.2cm 1.2cm; font-size:7pt; }
+    .titulo { text-align:center; font-weight:700; font-size:9pt; margin:0 0 .25cm; }
+    .datos { display:grid; grid-template-columns:1.1fr 1.3fr 1fr; gap:.4cm; font-size:7pt; }
+    .datos p { margin:0 0 1px; }
+    .calif { text-align:center; font-weight:700; font-size:9pt; letter-spacing:2px; margin:.25cm 0 0; }
+    .leyenda { text-align:center; font-size:6.5pt; margin:0 0 .2cm; }
+    .bloque { margin-bottom:.3cm; }
+    .cab-bloque { display:flex; font-weight:700; font-size:7.5pt; margin-bottom:1px; }
+    .cab-bloque .etiqueta { width:7.2cm; }
+    .cab-bloque .semestre { flex:1; text-align:left; padding-left:.3cm; }
+    table { width:100%; border-collapse:collapse; table-layout:fixed; }
+    th, td { border:1px solid #000; padding:0 2px; height:.36cm; text-align:center; font-size:6.8pt; white-space:nowrap; overflow:hidden; }
+    th { font-weight:700; }
+    th.osc { background:#4b4b4b; color:#fff; }
+    .mat { text-align:left; }
+    .est, .obs { text-align:left; }
+    .c-mat { width:7.2cm; } .c-n { width:.62cm; } .c-art { width:1.15cm; } .c-fecha { width:1.5cm; } .c-est { width:1.7cm; } .c-obs { width:2.4cm; }
+    .pie { position:absolute; bottom:-.6cm; left:0; right:0; text-align:center; font-size:7pt; }
+  `;
+
+  return abrirHojaSimple(`Kardex ${alumno?.matricula ?? ""}`, paginas, estilos, true);
+}
+
+/* =========================================
+   🏛️ ENCABEZADOS POR NIVEL
+========================================= */
+
+export const esUniversidad = (alumno: any) =>
+  /DER/i.test(alumno?.grupo?.nombre ?? "") || /DERECHO|LICENCIATURA/i.test(alumno?.carrera?.nombre ?? "");
+
+const TITULO_NIVEL = {
+  UNIVERSIDAD: ["ESCUELA DE DERECHO", "DE ZAMORA INCORPORADA A LA", "UNIVERSIDAD MICHOACANA DE SAN NICOLÁS DE HIDALGO"],
+  PREPARATORIA: ["ESCUELA PREPARATORIA POR COOPERACIÓN", "DE ZAMORA INCORPORADA A LA", "UNIVERSIDAD MICHOACANA DE SAN NICOLÁS DE HIDALGO"],
+};
+
+const escudoUMSNH = (clase = "escudo-umsnh") =>
+  `<img class="${clase}" src="/escudo-umsnh.png" alt="" onerror="this.onerror=null;this.src='/escudo-prepa.png'">`;
+
+const encabezadoInstitucional = (universidad: boolean, serif = false) => `
+  <div class="enc-inst">
+    ${escudoUMSNH()}
+    <div class="enc-titulo${serif ? " serif" : ""}">${(universidad ? TITULO_NIVEL.UNIVERSIDAD : TITULO_NIVEL.PREPARATORIA).join("<br>")}</div>
+  </div>`;
+
+const ESTILO_ENC = `
+  .enc-inst { position:relative; text-align:center; min-height:2.3cm; }
+  .enc-inst .escudo-umsnh { position:absolute; left:0; top:0; width:2.2cm; filter:grayscale(1) contrast(1.15); }
+  .enc-titulo { font-weight:700; font-size:12pt; line-height:1.2; padding:0 2.4cm; }
+  .enc-titulo.serif { font-family:"Times New Roman", Georgia, serif; }
+`;
+
+/** Encabezado membretado de la prepa (franja azul con escudo de la UMSNH). */
+const bannerPrepa = (ancho = "14cm") =>
+  `<div class="banner-prepa"><img src="/membrete-banner.png" alt="" style="width:${ancho}"></div>`;
+
+const ESTILO_BANNER = `
+  .banner-prepa { text-align:center; margin:0 0 .25cm; }
+  .banner-prepa img { display:inline-block; height:auto; }
+`;
+
+const ORDINAL_CORTO = ["", "1ro.", "2do.", "3ro.", "4to.", "5to.", "6to.", "7mo.", "8vo.", "9no.", "10mo."];
+
+/* =========================================
+   📒 BOLETA DE CALIFICACIONES Y ASISTENCIAS (UNIVERSIDAD)
+   El "kardex" del semestre que entrega la Escuela de Derecho.
+========================================= */
+
+export function abrirBoletaDerecho(
+  alumno: any,
+  calificaciones: any[],
+  asistencias: any[] = [],
+  inscripciones: any[] = [],
+  cicloId?: string
+): boolean {
+  const inicio = (c: any) => new Date(c?.cicloEscolar?.fechaInicio ?? c?.cicloEscolar?.createdAt ?? 0).getTime();
+  const ciclos = [...new Map((calificaciones ?? []).map((c) => [c.cicloEscolarId, c.cicloEscolar])).values()]
+    .sort((a: any, b: any) => inicio({ cicloEscolar: b }) - inicio({ cicloEscolar: a }));
+  const ciclo: any = ciclos.find((c: any) => c?.id === cicloId) ?? ciclos[0];
+
+  const delCiclo = (calificaciones ?? [])
+    .filter((c) => c.cicloEscolarId === ciclo?.id)
+    .sort((a, b) => String(a.materia?.clave ?? a.materia?.nombre).localeCompare(String(b.materia?.clave ?? b.materia?.nombre)));
+  const asis = new Map((asistencias ?? []).filter((a) => a.cicloEscolarId === ciclo?.id).map((a) => [a.materiaId, a]));
+
+  const grupo = (inscripciones ?? []).find((i) => i.cicloEscolarId === ciclo?.id)?.grupo?.nombre ?? alumno?.grupo?.nombre ?? "";
+  const semestre = delCiclo[0]?.materia?.semestre?.numero ?? Number(String(grupo).match(/^\d+/)?.[0] ?? 0);
+  const v = (x: any) => (x == null ? "" : String(x));
+  const vacias = (n: number, cols: number) => `<tr>${"<td>&nbsp;</td>".repeat(cols)}</tr>`.repeat(n);
+
+  const calif = delCiclo.map((c) => `<tr>
+      <td class="mat">${(c.materia?.nombre ?? "").toUpperCase()}</td>
+      <td>${v(c.primerParcial)}</td><td>${v(c.segundoParcial)}</td><td>${v(c.promedio)}</td>
+      <td>${v(c.examenFinal)}</td><td>${v(c.notaFinal)}</td><td>${v(c.extraordinario)}</td>
+      <td>${v(c.adicional)}</td><td>${v(c.especial)}</td></tr>`).join("");
+
+  const asistencia = delCiclo.map((c) => {
+    const a: any = asis.get(c.materiaId);
+    const total = a ? [1, 2, 3, 4].reduce((s, m) => s + (a[`asisMes${m}`] ?? 0) + (a[`faltasMes${m}`] ?? 0), 0) : 0;
+    const faltas = a ? [1, 2, 3, 4].reduce((s, m) => s + (a[`faltasMes${m}`] ?? 0), 0) : 0;
+    const mes = (m: number) => a && (a[`asisMes${m}`] || a[`faltasMes${m}`]) ? `<td>${a[`asisMes${m}`]}</td><td>${a[`faltasMes${m}`]}</td>` : "<td></td><td></td>";
+    return `<tr><td class="mat">${(c.materia?.nombre ?? "").toUpperCase()}</td>${[1, 2, 3, 4].map(mes).join("")}<td>${total ? ((faltas / total) * 100).toFixed(1) : ""}</td></tr>`;
+  }).join("");
+
+  const pagina = `
+    <div class="pag">
+      ${encabezadoInstitucional(true)}
+      <div class="datos">
+        <div><p><b>ALUMNO:</b> <span>${nombreOficial(alumno?.user?.name)}</span></p>
+             <p><b>SEMESTRE:</b> <span>${ORDINAL_CORTO[semestre] ?? ""}</span> <b class="grupo">GRUPO:</b> ${letraGrupo(grupo)}</p>
+             <p><b>MATRÍCULA:</b> ${alumno?.matricula ?? ""}</p></div>
+        <div><p><b>AVISO:</b></p><p><b>CICLO ESCOLAR:</b> ${ciclo?.nombre ?? ""}</p></div>
+      </div>
+
+      <p class="sub">CALIFICACIONES</p>
+      <table class="cal">
+        <thead><tr><th class="mat">Materia</th><th>1er Parcial</th><th>2do Parcial</th><th>Promedio</th><th>Examen final</th><th>Nota final</th><th>Extraordinario</th><th>Adicional</th><th>Especial</th></tr></thead>
+        <tbody>${calif}${vacias(3, 9)}</tbody>
+      </table>
+      <p class="leyenda">Columna "Promedio": (1er Parcial + 2do Parcial) / 2<br>Columna "Nota final": (Examen final + Promedio) / 2<br>Columna "Extraordinario": Nota obtenida en el examen<br>Columna "Adicional": Nota obtenida en el examen<br>Columna "Especial": Nota obtenida en el examen</p>
+
+      <p class="sub">ASISTENCIAS</p>
+      <table class="asis">
+        <thead>
+          <tr><th rowspan="2" class="mat">Materia</th><th colspan="2">1er mes</th><th colspan="2">2do mes</th><th colspan="2">3er mes</th><th colspan="2">4to mes</th><th rowspan="2">% Faltas</th></tr>
+          <tr>${"<th>Asist.</th><th>Falta</th>".repeat(4)}</tr>
+        </thead>
+        <tbody>${asistencia}${vacias(3, 10)}</tbody>
+      </table>
+
+      <div class="firma"><p>Zamora Michoacán</p><p>DIRECTOR DE LA ESCUELA DE DERECHO</p><p>M. en D. IGOR OROZCO GIL</p></div>
+      <p class="pie">Página 1/1</p>
+    </div>`;
+
+  const estilos = `
+    ${ESTILO_ENC}
+    .pag { position:absolute; inset:1.2cm 1.4cm 1.2cm; font-size:8.5pt; }
+    .datos { display:flex; gap:2cm; margin:.4cm 0 .1cm 1.2cm; font-size:8pt; }
+    .datos p { margin:0; } .datos .grupo { margin-left:1.5cm; }
+    .sub { text-align:center; font-weight:700; letter-spacing:4px; margin:.2cm 0 .05cm; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { border:1px solid #000; padding:1px 3px; text-align:center; font-size:8pt; height:.42cm; }
+    th { font-weight:400; } .mat { text-align:left; width:38%; }
+    .asis td, .asis th { height:.5cm; }
+    .leyenda { margin:.1cm 0 .3cm; font-size:7.5pt; line-height:1.25; }
+    .firma { position:absolute; bottom:1.4cm; left:0; right:0; text-align:center; font-weight:700; font-size:9.5pt; }
+    .firma p { margin:0; }
+    .pie { position:absolute; bottom:0; left:0; right:0; text-align:center; font-style:italic; font-size:8pt; }
+  `;
+
+  return abrirHojaSimple(`Calificaciones ${alumno?.matricula ?? ""}`, [pagina], estilos);
+}
+
+/* =========================================
+   📋 LISTAS POR GRUPO PARA EL MAESTRO
+   PARCIALES: hoja para capturar 1er y 2do parcial a mano.
+   FINAL: concentrado con faltas y promedio, para el examen final.
+========================================= */
+
+export function abrirListaGrupo(rejilla: any, modo: "PARCIALES" | "FINAL" = "PARCIALES"): boolean {
+  const a = rejilla?.asignacion ?? {};
+  const universidad = /DER/i.test(a.grupo ?? "");
+  const alumnos = [...(rejilla?.alumnos ?? [])]
+    .map((x: any) => ({ ...x, oficial: nombreOficial(x.nombre) }))
+    .sort((x: any, y: any) => x.oficial.localeCompare(y.oficial, "es"));
+
+  const grupoTexto = `${semestreEnLetra(a.semestre) || ""} ${letraGrupo(a.grupo) || a.grupo || ""}`.trim();
+  const ahora = new Date();
+  const sello = `${String(ahora.getDate()).padStart(2, "0")}-${String(ahora.getMonth() + 1).padStart(2, "0")}-${ahora.getFullYear()} ${ahora.toTimeString().slice(0, 8)}`;
+
+  const columnas = modo === "PARCIALES"
+    ? ["Primer Parcial", "Segundo Parcial", "Promedio", "Observaciones"]
+    : ["Faltas", "Prom.", "E. Final", "Prom.Fin", "Extra.", "E.E.R.", "Fecha", "Comentarios"];
+
+  const POR_HOJA = universidad ? 40 : 34;
+  const filas = alumnos.map((x: any, i: number) => {
+    const celdas = modo === "PARCIALES"
+      ? `<td></td><td></td><td></td><td class="obs"></td>`
+      : `<td class="pct">${x.faltasPct != null ? `${Number(x.faltasPct).toFixed(0)} ` : ""}%</td><td>${x.PROM ?? ""}</td><td></td><td></td><td></td><td></td><td></td><td class="obs"></td>`;
+    return `<tr><td class="num">${i + 1}</td><td class="nom">${x.oficial}</td>${celdas}</tr>`;
+  });
+
+  const hojas: string[][] = [];
+  for (let i = 0; i < Math.max(filas.length, 1); i += POR_HOJA) hojas.push(filas.slice(i, i + POR_HOJA));
+
+  const paginas = hojas.map((trozo, h) => `
+    <div class="pag">
+      ${modo === "FINAL" ? `<p class="sello">${sello}</p>` : ""}
+      ${universidad ? encabezadoInstitucional(true, true) : bannerPrepa("13cm")}
+      <div class="meta">
+        <div>
+          <p><b>Ciclo Escolar:</b> ${a.ciclo ?? ""}</p>
+          <p><b>Nombre:</b> ${a.docente ?? ""}</p>
+          <p><b>Materia:</b> ${(a.materia ?? "").toUpperCase()}</p>
+          <p><b>Grupo:</b> ${grupoTexto}</p>
+        </div>
+        <p class="firma-linea"><b>Firma:</b> <span></span></p>
+      </div>
+      <table class="${modo === "PARCIALES" ? "parciales" : "final"}">
+        <thead><tr><th class="num"></th><th class="nom"></th>${columnas.map((c) => `<th>${c}</th>`).join("")}</tr></thead>
+        <tbody>${trozo.join("")}</tbody>
+      </table>
+      ${hojas.length > 1 ? `<p class="pie">Página ${h + 1}/${hojas.length}</p>` : ""}
+    </div>`);
+
+  const estilos = `
+    ${ESTILO_ENC}
+    ${ESTILO_BANNER}
+    .pag { position:absolute; inset:1.1cm 1.4cm 1.2cm; font-size:8pt; }
+    .pie { position:absolute; bottom:-.6cm; left:0; right:0; text-align:center; font-size:7.5pt; font-style:italic; }
+    .sello { position:absolute; top:-.6cm; right:0; margin:0; font-size:7pt; }
+    .meta { display:flex; justify-content:space-between; align-items:flex-end; margin:.3cm 0 .1cm; font-size:8pt; }
+    .meta p { margin:0 0 1px; }
+    .firma-linea span { display:inline-block; width:6cm; border-bottom:1px solid #000; }
+    table { width:100%; border-collapse:collapse; }
+    th { font-weight:400; font-size:8pt; padding:1px 3px; border:0; }
+    td { border:1px solid #000; height:.48cm; padding:0 3px; font-size:8pt; text-align:center; }
+    td.num { width:.6cm; text-align:right; }
+    td.nom, th.nom { text-align:left; width:${modo === "PARCIALES" ? "40%" : "34%"}; white-space:nowrap; }
+    td.pct { text-align:right; }
+    .parciales td.obs { width:30%; } .final td.obs { width:18%; }
+  `;
+
+  return abrirHojaSimple(`Lista ${a.grupo ?? ""} ${a.materia ?? ""}`, paginas, estilos);
+}
+
+/* =========================================
+   📜 CONSTANCIA DE ESTUDIOS (UNIVERSIDAD)
+========================================= */
+
+const NUM_LETRA = [
+  "cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez",
+  "once", "doce", "trece", "catorce", "quince", "dieciséis", "diecisiete", "dieciocho", "diecinueve", "veinte",
+  "veintiuno", "veintidós", "veintitrés", "veinticuatro", "veinticinco", "veintiséis", "veintisiete",
+  "veintiocho", "veintinueve", "treinta", "treinta y uno",
+];
+
+const anioEnLetra = (y: number) => {
+  const r = y - 2000;
+  return `dos mil${r ? " " + (NUM_LETRA[r] ?? String(r)) : ""}`;
+};
+
+/** "26 (veintiséis) de enero de 2026 (dos mil veintiséis)". */
+export function fechaConLetra(v?: string | Date | null): string {
+  if (!v) return "—";
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return String(v);
+  const dia = d.getUTCDate();
+  return `${String(dia).padStart(2, "0")} (${NUM_LETRA[dia]}) de ${MESES[d.getUTCMonth()]} de ${d.getUTCFullYear()} (${anioEnLetra(d.getUTCFullYear())})`;
+}
+
+export function abrirConstanciaUniversidad(
+  alumno: any,
+  datos: { semestre?: number | null; materias?: string[]; inicioCurso?: string | Date | null; finCurso?: string | Date | null; referencia?: string } = {}
+): boolean {
+  const semestre = semestreEnLetra(datos.semestre ?? alumno?.grupo?.semestre?.numero) || "SEMESTRE";
+  const hoy = new Date();
+  const pagina = `
+    <p class="destinatario">A QUIEN CORRESPONDA:</p>
+    <p class="lugar-fecha">Zamora de Hidalgo, Michoacán, a ${String(hoy.getDate()).padStart(2, "0")} (${NUM_LETRA[hoy.getDate()]}) de ${MESES[hoy.getMonth()]} de ${hoy.getFullYear()} (${anioEnLetra(hoy.getFullYear())})</p>
+    <p class="sangria">
+      El que suscribe, Director de la Escuela de Derecho del <strong>CENTRO DE ESTUDIOS SUPERIORES DE ZAMORA, A.C.</strong>,
+      con claves 154-218.1"97" y 16MSU0014T incorporada a la ${ESCUELA.universidad}, hace <strong>CONSTAR</strong>
+      que el (la) joven: <strong>${nombreOficial(alumno?.user?.name)}</strong>, con número de matrícula
+      <strong>${alumno?.matricula ?? "—"}</strong>, cursa en este plantel el <strong>${semestre}</strong> de la
+      <strong>LICENCIATURA EN DERECHO.</strong> Con un periodo vacacional de 10 (diez) días en semana santa y semana de pascua;
+      cursando las siguientes materias:
+    </p>
+    <p class="materias">${(datos.materias ?? []).map((m) => m.toUpperCase()).join("<br>")}</p>
+    <p class="fechas">Inicio de curso: &nbsp;El ${fechaConLetra(datos.inicioCurso)}<br>Fin de curso: &nbsp;El ${fechaConLetra(datos.finCurso)}</p>
+    <p class="sangria">Se extiende la presente constancia a solicitud del interesado(a) para los fines que mejor le convengan.</p>
+    <p class="firma">M. en D. Igor Orozco Gil</p>
+    <p class="referencia">${datos.referencia ?? `IOG/EASO/${hoy.getFullYear()}-01`}</p>
+  `;
+
+  const estilos = `
+    .contenido { position:absolute; top:3.2cm; bottom:2.5cm; left:2.5cm; right:2.5cm; font-family:"Times New Roman", Georgia, serif; font-size:11.5pt; }
+    .destinatario { margin:0 0 .6cm; }
+    .lugar-fecha { text-align:right; margin:0 0 .6cm; }
+    .sangria { text-indent:1.2cm; margin:0 0 .3cm; text-align:justify; line-height:1.35; }
+    .materias { margin:0 0 .3cm; line-height:1.15; }
+    .fechas { margin:0 0 .3cm 1.2cm; line-height:1.4; text-align:left; }
+    .firma { position:absolute; bottom:4cm; left:0; right:0; text-align:center; margin:0; }
+    .referencia { position:absolute; bottom:2.2cm; left:0; margin:0; font-size:10.5pt; font-style:italic; text-align:left; }
+  `;
+
+  // Derecho imprime en hoja blanca: el membrete de la prepa no le corresponde.
+  return abrirHojaSimple(`Constancia ${alumno?.matricula ?? ""}`, [`<div class="contenido">${pagina}</div>`], estilos);
 }
 
 /* =========================================
@@ -567,6 +1082,7 @@ export function abrirCredencial(alumno: any, ciclo?: string): boolean {
 /** Cómo se redacta el cuerpo, que es lo único que cambia entre variantes. */
 export type TipoConstancia =
   | "TERMINADO" // cursó y terminó el semestre
+  | "BUENA_CONDUCTA" // fue alumno; observó buena conducta
   | "CURSANDO_INVIERNO" // cursa, con receso de navidad y año nuevo
   | "CURSANDO_PRIMAVERA"; // cursa, con receso de semana santa y pascua
 
@@ -601,6 +1117,10 @@ export interface DatosConstancia {
   folioRecibo?: number | string;
   /** Clave del firmante (COG, IOG, JRVC, JFVD). Por omisión, el de prepa. */
   firmante?: string;
+  /** Ciclos en que estuvo (buena conducta): "2024-2025 2025-2026". */
+  ciclos?: string;
+  /** Sin recuadro para la fotografía. */
+  sinFoto?: boolean;
 }
 
 export function abrirConstancia(alumno: any, datos: DatosConstancia = {}): boolean {
@@ -608,7 +1128,7 @@ export function abrirConstancia(alumno: any, datos: DatosConstancia = {}): boole
 
   const firma = firmantePorClave(datos.firmante);
 
-  const nombre = (alumno?.user?.name ?? "—").toUpperCase();
+  const nombre = nombreOficial(alumno?.user?.name);
 
   const semestre =
     semestreEnLetra(datos.semestre) ||
@@ -617,9 +1137,7 @@ export function abrirConstancia(alumno: any, datos: DatosConstancia = {}): boole
 
   const bachillerato =
     datos.bachillerato ??
-    alumno?.trayectoria?.nombre ??
-    alumno?.carrera?.nombre ??
-    "—";
+    bachilleratoDeGrupo(alumno?.grupo?.nombre, alumno?.trayectoria?.nombre ?? alumno?.carrera?.nombre);
 
   const turno = (
     datos.turno ??
@@ -629,7 +1147,15 @@ export function abrirConstancia(alumno: any, datos: DatosConstancia = {}): boole
 
   // El párrafo que cambia entre las tres variantes.
   const cuerpo =
-    tipo === "TERMINADO"
+    tipo === "BUENA_CONDUCTA"
+      ? `
+        Con número de matrícula <strong>${alumno?.matricula ?? "—"}</strong>,
+        fue alumno en este plantel. Cursó el ${semestre}${turno ? ` turno ${turno}` : ""}
+        en el bachillerato ${bachillerato}. En el (los) ciclo(s) escolares
+        ${datos.ciclos ?? datos.ciclo ?? "—"} habiendo observado durante su estancia en el
+        plantel <strong><u>BUENA CONDUCTA</u></strong>.
+      `
+      : tipo === "TERMINADO"
       ? `
         Con número de matrícula <strong>${alumno?.matricula ?? "—"}</strong>,
         quien cursó y terminó el ${semestre} en esta institución en el
@@ -645,7 +1171,7 @@ export function abrirConstancia(alumno: any, datos: DatosConstancia = {}): boole
       `;
 
   const fechas =
-    tipo === "TERMINADO"
+    tipo === "TERMINADO" || tipo === "BUENA_CONDUCTA"
       ? ""
       : `
         <p class="fechas">
@@ -657,7 +1183,7 @@ export function abrirConstancia(alumno: any, datos: DatosConstancia = {}): boole
   const pagina = `
     <p class="destinatario">A QUIEN CORRESPONDA:</p>
 
-    <div class="caja-foto"></div>
+    ${datos.sinFoto ? "" : '<div class="caja-foto"></div>'}
 
     <p class="lugar-fecha">Zamora Michoacán, a ${fechaLarga()}</p>
 
@@ -693,7 +1219,7 @@ export function abrirConstancia(alumno: any, datos: DatosConstancia = {}): boole
     .destinatario { margin:0; font-weight:400; }
     /* Recuadro para la fotografía, como en el formato impreso. */
     .caja-foto { position:absolute; top:0; right:0; width:2.6cm; height:2.6cm; border:1px dashed #999; }
-    .lugar-fecha { text-align:center; margin:.9cm 0 1.1cm; }
+    .lugar-fecha { text-align:right; margin:.9cm 3.2cm 1.1cm 0; }
     .sangria { text-indent:1.2cm; margin:0 0 .55cm; text-align:justify; line-height:1.45; }
     .nombre { text-align:center; font-weight:700; margin:.5cm 0; letter-spacing:.5px; }
     .fechas { margin:0 0 .55cm 1.2cm; line-height:1.5; text-align:left; }
@@ -755,12 +1281,13 @@ export function abrirConstanciaCalificaciones(
   calificaciones: any[],
   datos: DatosConstancia = {}
 ): boolean {
-  const nombre = (alumno?.user?.name ?? "—").toUpperCase();
+  const nombre = nombreOficial(alumno?.user?.name);
 
   const firma = firmantePorClave(datos.firmante);
 
   const bachillerato =
-    datos.bachillerato ?? alumno?.trayectoria?.nombre ?? alumno?.carrera?.nombre ?? "—";
+    datos.bachillerato ??
+    bachilleratoDeGrupo(alumno?.grupo?.nombre, alumno?.trayectoria?.nombre ?? alumno?.carrera?.nombre);
 
   const turno = (datos.turno ?? alumno?.grupo?.turno?.nombre ?? "").toUpperCase();
 
@@ -792,8 +1319,11 @@ export function abrirConstanciaCalificaciones(
 
       <table>
         ${b.filas
+          // Orden del plan de estudios (clave), no alfabético.
           .sort((x, y) =>
-            (x.materia?.nombre ?? "").localeCompare(y.materia?.nombre ?? "")
+            String(x.materia?.clave ?? x.materia?.nombre ?? "").localeCompare(
+              String(y.materia?.clave ?? y.materia?.nombre ?? "")
+            )
           )
           .map(
             (c) => `
@@ -802,8 +1332,9 @@ export function abrirConstanciaCalificaciones(
                 <td class="nota">${c.notaDefinitiva ?? "—"}</td>
                 <td class="estatus">${estatusImpreso(c)}</td>
                 <td class="fecha">${
-                  c.fecha
-                    ? new Date(c.fecha).toISOString().slice(0, 10)
+                  // La fecha solo se anota cuando hubo examen fuera del ordinario.
+                  (c.extraordinario || c.adicional || c.especial) && (c.fecha || c.updatedAt)
+                    ? new Date(c.fecha || c.updatedAt).toISOString().slice(0, 10)
                     : ""
                 }</td>
               </tr>`

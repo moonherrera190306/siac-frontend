@@ -5,7 +5,13 @@ import { useParams } from "next/navigation";
 import { API_URL } from "@/lib/config";
 import {
   abrirConstanciaCalificaciones,
+  abrirConstancia,
+  abrirConstanciaUniversidad,
+  abrirKardex,
+  abrirBoletaDerecho,
+  esUniversidad,
   FIRMANTES,
+  type TipoConstancia,
 } from "@/lib/documentos";
 
 const COLOR_DOC: Record<string, string> = {
@@ -35,6 +41,11 @@ export default function ExpedientePage() {
   const [calificaciones, setCalificaciones] = useState<any[]>([]);
 
   const [firmante, setFirmante] = useState(FIRMANTES[0].clave);
+
+  // Lo que piden los documentos: se trae cuando se abre el expediente.
+  const [extra, setExtra] = useState<any>({ inscripciones: [], asistencias: [], materiasActuales: [], cicloActual: null });
+  const [tipoConstancia, setTipoConstancia] = useState<TipoConstancia>("CURSANDO_PRIMAVERA");
+  const [sinFoto, setSinFoto] = useState(false);
 
   const [nuevoDoc, setNuevoDoc] = useState({ nombre: "", tipo: "", url: "" });
 
@@ -69,6 +80,12 @@ export default function ExpedientePage() {
       setInscripciones(ji?.data ?? []);
       setDocumentos(jd?.data ?? []);
       setCalificaciones(jc?.data ?? []);
+      setExtra({
+        inscripciones: jc?.inscripciones ?? [],
+        asistencias: jc?.asistencias ?? [],
+        materiasActuales: jc?.materiasActuales ?? [],
+        cicloActual: jc?.cicloActual ?? null,
+      });
       setError("");
     } catch (e: any) {
       setError(e.message || "Error al cargar el expediente");
@@ -134,6 +151,33 @@ export default function ExpedientePage() {
     cargar();
   };
 
+  const universidad = esUniversidad(alumno);
+
+  // 🔒 Kardex y constancias: solo Dirección y Secretaría.
+  const rol = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "{}")?.role ?? "";
+    } catch {
+      return "";
+    }
+  })();
+  const emiteDocumentos = rol === "DIRECTOR" || rol === "SECRETARIA";
+
+  // Abre el documento; si el navegador bloquea la ventana, se avisa.
+  const abrir = (fn: () => boolean) => {
+    if (!fn()) {
+      setError("El navegador bloqueó la ventana emergente. Permítela para imprimir.");
+    }
+  };
+
+  const ciclosCursados = [...new Set((extra.inscripciones ?? []).map((i: any) => i.cicloEscolar?.nombre).filter(Boolean))]
+    .sort()
+    .join(" ");
+  const cicloMasReciente = ciclosCursados.split(" ").pop();
+
+  const fechaTexto = (v?: string | null) =>
+    v ? new Date(v).toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" }) : undefined;
+
   if (loading) return <p className="p-6">Cargando...</p>;
 
   if (!alumno) {
@@ -162,6 +206,7 @@ export default function ExpedientePage() {
           </p>
         )}
 
+        {emiteDocumentos && (<>
         <div className="mt-4 flex flex-wrap items-end gap-3">
         <label className="text-sm">
           <span className="mb-1 block text-gray-600">Firma</span>
@@ -180,22 +225,79 @@ export default function ExpedientePage() {
         </label>
 
         <button
-          onClick={() => {
-            if (
-              !abrirConstanciaCalificaciones(alumno, calificaciones, { firmante })
-            ) {
-              setError(
-                "El navegador bloqueó la ventana emergente. Permítela para imprimir la constancia."
-              );
-            }
-          }}
-          disabled={calificaciones.length === 0}
+          onClick={() => abrir(() => abrirConstanciaCalificaciones(alumno, calificaciones, { firmante }))}
+          disabled={calificaciones.length === 0 || universidad}
           className="siac-btn siac-btn-secundario disabled:cursor-not-allowed disabled:opacity-40"
         >
           Constancia de calificaciones
           {calificaciones.length > 0 && ` (${calificaciones.length} materias)`}
         </button>
+
+        <button
+          onClick={() =>
+            abrir(() =>
+              universidad
+                ? abrirBoletaDerecho(alumno, calificaciones, extra.asistencias, extra.inscripciones)
+                : abrirKardex(alumno, calificaciones, extra.inscripciones)
+            )
+          }
+          disabled={calificaciones.length === 0}
+          className="siac-btn siac-btn-secundario disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {universidad ? "Boleta de calificaciones" : "Kardex"}
+        </button>
         </div>
+
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          {!universidad && (
+            <label className="text-sm">
+              <span className="mb-1 block text-gray-600">Constancia</span>
+              <select
+                value={tipoConstancia}
+                onChange={(e) => setTipoConstancia(e.target.value as TipoConstancia)}
+                className="rounded-xl border border-gray-300 px-3 py-2 text-sm"
+              >
+                <option value="CURSANDO_PRIMAVERA">Estudios — cursando (semana santa)</option>
+                <option value="CURSANDO_INVIERNO">Estudios — cursando (navidad)</option>
+                <option value="TERMINADO">Cursó y terminó el semestre</option>
+                <option value="BUENA_CONDUCTA">Buena conducta</option>
+              </select>
+            </label>
+          )}
+
+          {!universidad && (
+            <label className="flex items-center gap-2 pb-2 text-sm text-gray-600">
+              <input type="checkbox" checked={sinFoto} onChange={(e) => setSinFoto(e.target.checked)} />
+              Sin recuadro de foto
+            </label>
+          )}
+
+          <button
+            onClick={() =>
+              abrir(() =>
+                universidad
+                  ? abrirConstanciaUniversidad(alumno, {
+                      materias: extra.materiasActuales,
+                      inicioCurso: extra.cicloActual?.fechaInicio,
+                      finCurso: extra.cicloActual?.fechaFin,
+                    })
+                  : abrirConstancia(alumno, {
+                      tipo: tipoConstancia,
+                      firmante,
+                      sinFoto,
+                      ciclo: extra.cicloActual?.nombre ?? cicloMasReciente,
+                      ciclos: ciclosCursados,
+                      inicioCurso: fechaTexto(extra.cicloActual?.fechaInicio),
+                      finCurso: fechaTexto(extra.cicloActual?.fechaFin),
+                    })
+              )
+            }
+            className="siac-btn siac-btn-secundario"
+          >
+            {universidad ? "Constancia de estudios" : "Generar constancia"}
+          </button>
+        </div>
+        </>)}
       </section>
 
       {error && (
