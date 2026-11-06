@@ -1000,87 +1000,121 @@ export function abrirConstanciaUniversidad(
 /* =========================================
    🪪 CREDENCIAL ESCOLAR
 ========================================= */
-export function abrirCredencial(alumno: any, ciclo?: string): boolean {
-  const nombre = alumno.user?.name ?? "";
+export function abrirCredencial(
+  alumno: any,
+  ciclo?: string | { fechaInicio?: string | null; fechaFin?: string | null; nombre?: string } | null
+): boolean {
+  const derecho = esUniversidad(alumno);
+  const nombre = String(alumno?.user?.name ?? "").toUpperCase();
+  const MES = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
 
-  const foto = alumno.foto
+  // Vigencia de un año escolar: agosto a julio del ciclo vigente.
+  const inicio = (() => {
+    const f = typeof ciclo === "object" && ciclo?.fechaInicio ? new Date(ciclo.fechaInicio) : null;
+    if (f && !isNaN(f.getTime())) return new Date(f.getUTCFullYear(), f.getUTCMonth(), 1);
+    const hoy = new Date();
+    return new Date(hoy.getMonth() >= 7 ? hoy.getFullYear() : hoy.getFullYear() - 1, 7, 1);
+  })();
+  const fin = new Date(inicio.getFullYear(), inicio.getMonth() + 11, 1);
+
+  const carrera = derecho
+    ? "Licenciatura en Derecho"
+    : (() => {
+        const b = bachilleratoDeGrupo(alumno?.grupo?.nombre, alumno?.trayectoria?.nombre);
+        return b === "TRONCO COMÚN" ? "BACHILLERATO GENERAL" : `BACHILLERATO ${b}`;
+      })();
+
+  const emblema = derecho ? "/justicia-universidad.png" : "/escudo-prepa.png";
+  const firma = derecho
+    ? { nombre: "M. en D. Igor Orozco Gil", cargo: "Director de la Escuela de Derecho" }
+    : { nombre: "M. en E. Cuauhtémoc Orozco Gil", cargo: "Director de la Preparatoria" };
+
+  const foto = alumno?.foto
     ? `<img src="${alumno.foto}" alt="">`
-    : `<span>${nombre
-        .split(" ")
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((p: string) => p[0])
-        .join("")
-        .toUpperCase()}</span>`;
+    : `<span>FOTO</span>`;
 
-  const cuerpo = `
-    <div class="credencial">
-      <div class="franja">
-        <p class="escuela">${ESCUELA.nombre}</p>
-        <p class="tipo">CREDENCIAL DE ESTUDIANTE</p>
-      </div>
-
-      <div class="cuerpo">
-        <div class="foto">${foto}</div>
-
-        <div class="datos">
-          <p class="nombre">${nombre}</p>
-
-          <p class="dato"><span>Matrícula</span>${alumno.matricula ?? "—"}</p>
-          <p class="dato"><span>Carrera</span>${alumno.carrera?.nombre ?? "—"}</p>
-          <p class="dato"><span>Grupo</span>${alumno.grupo?.nombre ?? "—"}${
-    alumno.grupo?.turno?.nombre ? ` · ${alumno.grupo.turno.nombre}` : ""
-  }</p>
-          ${
-            alumno.trayectoria?.nombre
-              ? `<p class="dato"><span>Trayectoria</span>${alumno.trayectoria.nombre}</p>`
-              : ""
-          }
+  const frente = `
+    <div class="cred frente">
+      <div class="cab">
+        <img class="emblema ${derecho ? "oro" : "escudo"}" src="${emblema}" alt="">
+        <div class="marca">
+          <div class="linea1"><span class="ceszam">CESZAM</span><span class="barra"></span><span class="ces">CENTRO DE ESTUDIOS<br>SUPERIORES DE ZAMORA</span></div>
+          <div class="escuela">${derecho ? "ESCUELA DE DERECHO" : "ESCUELA PREPARATORIA"}</div>
+          <div class="incorp">incorporada a la UMSNH &nbsp; Clave: ${ESCUELA.claveCT}</div>
         </div>
       </div>
-
-      <div class="pie">
-        <span>Ciclo ${ciclo ?? "escolar vigente"}</span>
-        <span>${ESCUELA.rfc}</span>
+      <div class="cuerpo">
+        <div class="datos">
+          <div class="et">ACREDITA A:</div>
+          <div class="nombre">${nombre}</div>
+          <div class="et">COMO ALUMNO(A) DE:</div>
+          <div class="carrera">${carrera}</div>
+        </div>
+        <div class="foto">${foto}</div>
       </div>
-    </div>
+      <div class="pie">Esta credencial es personal e intransferible</div>
+    </div>`;
 
-    <div class="reverso">
-      <p class="titulo">Datos de emergencia</p>
+  const reverso = `
+    <div class="cred reverso">
+      <div class="cab2">
+        <div class="lema1">¡Orgullosamente Nicolaitas!</div>
+        <div class="lema2">¡Educación para todos!</div>
+        <div class="dir">Alonso Martínez esq. Benito Díaz de Gamarra s/n<br>Col. Jardinadas, Zamora, Michoacán. www.ceszam.mx</div>
+      </div>
+      <div class="cuerpo2">
+        <img class="agua" src="${emblema}" alt="" style="opacity:${derecho ? ".3" : ".14"}">
+        <div class="vig"><div class="et">VIGENCIA:</div><div class="val">${MES[inicio.getMonth()]} ${inicio.getFullYear()}<br>${MES[fin.getMonth()]} ${fin.getFullYear()}</div></div>
+        <div class="mat"><div class="et">MATRÍCULA:</div><div class="val">${alumno?.matricula ?? ""}</div></div>
+        <div class="firma"><span></span>${firma.nombre}<br>${firma.cargo}</div>
+      </div>
+    </div>`;
 
-      <p class="dato"><span>Tutor</span>${alumno.tutorNombre ?? "—"}</p>
-      <p class="dato"><span>Teléfono</span>${alumno.tutorTelefono ?? "—"}</p>
-      <p class="dato"><span>CURP</span>${alumno.curp ?? "—"}</p>
-
-      <p class="leyenda">
-        Esta credencial es personal e intransferible. En caso de extravío,
-        repórtelo en Secretaría Escolar.
-        <br>${ESCUELA.domicilio}
-      </p>
-    </div>
-  `;
+  const pagina = `<div class="par">${frente}${reverso}</div><p class="corte no-imprimir">Recorta por la línea punteada. Tamaño CR80 (8.56 × 5.4 cm).</p>`;
 
   const estilos = `
-    .hoja { max-width: 640px; }
-    .credencial { width:340px; margin:0 auto; border:1px solid #cbd5e1; border-radius:14px; overflow:hidden; box-shadow:0 6px 18px rgba(15,23,42,.08); }
-    .franja { background:#0f172a; color:#fff; padding:14px 16px; }
-    .escuela { margin:0; font-size:20px; font-weight:800; letter-spacing:4px; line-height:1; }
-    .tipo { margin:6px 0 0; font-size:12px; font-weight:700; letter-spacing:2px; color:#f59e0b; }
-    .cuerpo { display:flex; gap:14px; padding:16px; }
-    .foto { width:82px; height:100px; border-radius:8px; background:#e2e8f0; display:flex; align-items:center; justify-content:center; overflow:hidden; flex:none; }
+    .par { position:absolute; top:2cm; left:0; right:0; display:flex; flex-direction:column; align-items:center; gap:.8cm; }
+    .cred { position:relative; width:8.56cm; height:5.4cm; overflow:hidden; outline:1px dashed #9ca3af; outline-offset:2px;
+      font-family:"Times New Roman", Georgia, serif; color:#0b1b33; background:linear-gradient(135deg,#cfe0f2 0%,#f3f7fb 55%,#dde9f5 100%); }
+    .cab { display:flex; align-items:center; gap:.15cm; height:1.75cm; padding:.1cm .25cm; color:#fff;
+      background:linear-gradient(160deg,#071a36 0%,#0d2c5a 60%,#1c4a85 100%); border-bottom:.08cm solid #8b98ab; }
+    .emblema { height:1.45cm; width:auto; }
+    .emblema.oro { mix-blend-mode:screen; filter:invert(1) hue-rotate(180deg) brightness(2.3) saturate(1.4); }
+    .emblema.escudo { background:#fff; border-radius:.15cm; padding:.04cm; }
+    .marca { flex:1; line-height:1; }
+    .linea1 { display:flex; align-items:center; gap:.12cm; }
+    .ceszam { font-size:19pt; font-weight:700; letter-spacing:.5px; }
+    .barra { width:.07cm; height:.6cm; background:#e7c45a; }
+    .ces { font-size:6.3pt; font-weight:700; line-height:1.1; }
+    .escuela { font-size:9pt; font-weight:700; color:#e7c45a; margin:.08cm 0 .04cm .1cm; }
+    .incorp { font-size:5.3pt; font-weight:700; color:#e7c45a; }
+    .cuerpo { display:flex; height:3.15cm; padding:.15cm .25cm 0; }
+    .datos { flex:1; display:flex; flex-direction:column; justify-content:center; font-family:Arial, Helvetica, sans-serif; }
+    .et { font-family:"Times New Roman", serif; font-size:5.5pt; font-weight:700; color:#475569; letter-spacing:.3px; }
+    .nombre { font-size:8pt; font-weight:700; line-height:1.15; margin:.03cm 0 .18cm; border-top:1px solid #64748b; padding-top:.04cm; }
+    .carrera { font-size:8pt; margin-top:.03cm; border-top:1px solid #64748b; padding-top:.04cm; }
+    .foto { width:2.1cm; height:2.75cm; align-self:flex-end; background:#e5e7eb; display:flex; align-items:center; justify-content:center; overflow:hidden; }
     .foto img { width:100%; height:100%; object-fit:cover; }
-    .foto span { font-size:26px; font-weight:700; color:#64748b; }
-    .datos { min-width:0; }
-    .nombre { margin:0 0 10px; font-size:15px; font-weight:700; line-height:1.2; }
-    .dato { margin:0 0 6px; font-size:11.5px; }
-    .dato span { display:block; font-size:8.5px; text-transform:uppercase; letter-spacing:.5px; color:#64748b; }
-    .pie { display:flex; justify-content:space-between; padding:9px 16px; background:#f1f5f9; font-size:9px; color:#64748b; border-top:1px solid #e2e8f0; }
-    .reverso { width:340px; margin:26px auto 0; border:1px solid #cbd5e1; border-radius:14px; padding:16px; }
-    .reverso .titulo { margin:0 0 12px; font-size:11px; font-weight:700; letter-spacing:1px; color:#0f172a; text-transform:uppercase; }
-    .leyenda { margin-top:16px; font-size:9px; color:#94a3b8; line-height:1.5; }
+    .foto span { font-family:Arial, sans-serif; font-size:7pt; color:#9ca3af; }
+    .pie { position:absolute; left:0; right:0; bottom:0; height:.42cm; background:#071a36; color:#fff; font-size:5pt; font-weight:700;
+      text-align:center; line-height:.42cm; border-top:.05cm solid #1c4a85; }
+    .cab2 { height:1.55cm; text-align:center; color:#fff; background:linear-gradient(160deg,#071a36 0%,#0d2c5a 60%,#1c4a85 100%);
+      border-bottom:.08cm solid #8b98ab; padding-top:.1cm; line-height:1.05; }
+    .lema1 { font-size:10pt; font-weight:700; }
+    .lema2 { font-size:9pt; font-weight:700; color:#e7c45a; }
+    .dir { font-size:5.2pt; font-weight:700; margin-top:.07cm; }
+    .cuerpo2 { position:relative; height:3.85cm; }
+    .agua { position:absolute; right:.1cm; top:.1cm; height:3.6cm; opacity:.3; mix-blend-mode:multiply; }
+    .vig { position:absolute; left:.3cm; top:.3cm; }
+    .mat { position:absolute; left:4cm; top:.1cm; }
+    .vig .val { font-family:Arial, sans-serif; font-size:9pt; font-weight:700; margin-top:.15cm; line-height:1.2; }
+    .mat .val { font-family:Arial, sans-serif; font-size:12pt; font-weight:700; margin-top:.25cm; }
+    .firma { position:absolute; left:2.4cm; right:.6cm; bottom:.3cm; text-align:center; font-size:6pt; font-weight:700; line-height:1.15; }
+    .firma span { display:block; border-top:1px solid #0b1b33; margin-bottom:.04cm; }
+    .corte { position:absolute; bottom:1cm; left:0; right:0; text-align:center; font:11px system-ui; color:#6b7280; }
   `;
 
-  return abrirVentana(`Credencial ${alumno.matricula ?? ""}`, cuerpo, estilos);
+  return abrirHojaSimple(`Credencial ${alumno?.matricula ?? ""}`, [pagina], estilos);
 }
 
 /* =========================================
